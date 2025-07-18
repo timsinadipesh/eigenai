@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>frende</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* Align to the bottom */
+            background-color: #f0f2f5;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        .input-container {
+            position: relative;
+            width: 600px;
+            display: flex;
+            align-items: center;
+            margin-bottom: calc(50vh - 24px); /* Center vertically initially */
+            max-height: calc(50vh - 40px); /* Max height relative to viewport center */
+            flex-direction: column-reverse; /* Stack items bottom-up */
+        }
+        .input-box {
+            width: 100%;
+            min-height: 24px; /* Corresponds to font-size + padding */
+            padding: 12px 60px 12px 20px; /* Right padding for icon */
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 25px; /* Circular corners */
+            resize: none;
+            overflow-y: hidden; /* Hide scrollbar, handled by JS */
+            box-sizing: border-box;
+            line-height: 1.5;
+            max-height: calc(50vh - 40px); /* Max height relative to viewport center */
+        }
+        .input-box:focus {
+            outline: none;
+            border-color: #007BFF;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+        .icon-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            padding: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1; /* Ensure button is on top */
+        }
+        .icon-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: #555;
+        }
+        #send-icon {
+            display: none; /* Hidden by default */
+        }
+    </style>
+</head>
+<body>
+    <div class="input-container">
+        <textarea id="chat-input" class="input-box" placeholder="hello frende..." rows="1" autofocus></textarea>
+        <button class="icon-btn">
+            <svg id="mic-icon" viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
+            </svg>
+            <svg id="send-icon" viewBox="0 0 24 24">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+        </button>
+    </div>
+
+    <script>
+        const chatInput = document.getElementById('chat-input');
+        const micIcon = document.getElementById('mic-icon');
+        const sendIcon = document.getElementById('send-icon');
+        const inputContainer = document.querySelector('.input-container');
+        const iconBtn = document.querySelector('.icon-btn');
+
+        const autoResizeTextarea = () => {
+            const initialHeight = chatInput.style.height;
+            chatInput.style.height = 'auto';
+            const scrollHeight = chatInput.scrollHeight;
+            const maxHeight = parseFloat(getComputedStyle(chatInput).maxHeight);
+
+            if (scrollHeight > maxHeight) {
+                chatInput.style.height = maxHeight + 'px';
+                chatInput.style.overflowY = 'auto';
+            } else {
+                chatInput.style.height = scrollHeight + 'px';
+                chatInput.style.overflowY = 'hidden';
+            }
+
+            // Adjust icon position
+            const containerHeight = inputContainer.offsetHeight;
+            iconBtn.style.top = (containerHeight / 2) + 'px';
+        };
+
+        chatInput.addEventListener('input', () => {
+            // Toggle icons based on input value
+            const hasValue = chatInput.value.trim().length > 0;
+            micIcon.style.display = hasValue ? 'none' : 'block';
+            sendIcon.style.display = hasValue ? 'block' : 'none';
+
+            // Auto-resize textarea
+            autoResizeTextarea();
+        });
+
+        chatInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                // Prevent newline on Enter
+                event.preventDefault();
+                // Action for 'Enter' will be defined later
+            }
+        });
+
+        // Initial resize and icon position
+        autoResizeTextarea();
+    </script>
+</body>
+</html>
