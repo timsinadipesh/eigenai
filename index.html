@@ -4,37 +4,156 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>frende</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             height: 100vh;
             display: flex;
-            justify-content: center;
-            align-items: flex-end; /* Align to the bottom */
             background-color: #f0f2f5;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        .sidebar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 250px;
+            background-color: #fff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            transition: transform 0.3s ease;
+            transform: translateX(0);
+            padding-top: 50px; /* Fix overlapping with toggle button */
+            z-index: 1;
+        }
+        .sidebar.hidden {
+            transform: translateX(-100%);
+        }
+        .toggle-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            z-index: 2;
+        }
+        .toggle-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: #555;
+        }
+        .sidebar-btn {
+            background: none;
+            border: none;
+            padding: 10px;
+            text-align: left;
+            font-size: 16px;
+            cursor: pointer;
+            color: #333;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+        .sidebar-btn:hover {
+            background-color: #e9e9e9;
+        }
+        .separator {
+            border-top: 1px solid #ddd;
+            margin: 10px 0;
+        }
+        .main-content {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            transition: margin-left 0.3s ease;
+            position: relative;
+        }
+        .header {
+            position: absolute;
+            top: 5%; /* Pushed upwards for more space */
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .header h1 {
+            font-family: 'Pacifico', cursive;
+            font-size: 5em;
+            margin: 0;
+            color: #007BFF;
+        }
+        .header p {
+            font-size: 1.2em;
+            margin: 0;
+            color: #555;
         }
         .input-container {
             position: relative;
             width: 600px;
             display: flex;
             align-items: center;
-            margin-bottom: calc(50vh - 24px); /* Center vertically initially */
-            max-height: calc(50vh - 40px); /* Max height relative to viewport center */
-            flex-direction: column-reverse; /* Stack items bottom-up */
+            margin-bottom: calc(30vh - 24px);
+            max-height: calc(50vh - 40px);
+            flex-direction: column;
+        }
+        #attachment-display {
+            display: none;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-self: flex-start;
+            width: 100%;
+        }
+        .attachment-pill {
+            display: flex;
+            align-items: center;
+            background-color: #e9e9e9;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+        .attachment-pill span {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .remove-attachment-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0 0 0 8px;
+            font-size: 16px;
+            line-height: 1;
+            color: #555;
+        }
+        .input-box-wrapper {
+            position: relative;
+            width: 100%;
+            display: flex;
+            align-items: flex-end;
         }
         .input-box {
             width: 100%;
-            min-height: 24px; /* Corresponds to font-size + padding */
-            padding: 12px 60px 12px 20px; /* Right padding for icon */
+            min-height: 24px;
+            padding: 12px 80px 12px 50px;
             font-size: 16px;
             border: 1px solid #ccc;
-            border-radius: 25px; /* Circular corners */
+            border-radius: 25px;
             resize: none;
-            overflow-y: hidden; /* Hide scrollbar, handled by JS */
+            overflow-y: hidden;
             box-sizing: border-box;
             line-height: 1.5;
-            max-height: calc(50vh - 40px); /* Max height relative to viewport center */
         }
         .input-box:focus {
             outline: none;
@@ -43,9 +162,7 @@
         }
         .icon-btn {
             position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
+            bottom: 10px;
             background: none;
             border: none;
             padding: 5px;
@@ -53,77 +170,283 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 1; /* Ensure button is on top */
+            z-index: 1;
+        }
+        .attachment-btn {
+            left: 10px;
+        }
+        .mic-btn {
+            right: 50px;
+        }
+        .send-btn {
+            right: 10px;
         }
         .icon-btn svg {
             width: 24px;
             height: 24px;
             fill: #555;
         }
-        #send-icon {
-            display: none; /* Hidden by default */
+        .send-btn:disabled svg {
+            fill: #ccc;
+        }
+        .mic-recording svg {
+            fill: #ff0000;
+        }
+        .mode-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+            width: 100%;
+        }
+        .mode-btn {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .mode-btn:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
 <body>
-    <div class="input-container">
-        <textarea id="chat-input" class="input-box" placeholder="hello frende..." rows="1" autofocus></textarea>
-        <button class="icon-btn">
-            <svg id="mic-icon" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
-            </svg>
-            <svg id="send-icon" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+    <div class="container">
+        <button class="toggle-btn" id="toggle-btn">
+            <svg viewBox="0 0 24 24">
+                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
             </svg>
         </button>
+        <div class="sidebar hidden" id="sidebar">
+            <button class="sidebar-btn" id="new-chat-btn">New Chat</button>
+            <button class="sidebar-btn" id="folder-mode-btn">Folder Mode</button>
+            <button class="sidebar-btn" id="conversation-mode-btn">Conversation Mode</button>
+            <button class="sidebar-btn" id="flashcards-btn">Flashcards</button>
+            <button class="sidebar-btn" id="language-teacher-btn">Language Teacher</button>
+            <div class="separator"></div>
+            <button class="sidebar-btn" id="history-btn">History</button>
+        </div>
+        <div class="main-content" id="main-content">
+            <div id="header" class="header">
+                <h1>frende</h1>
+                <p>private, on-device, ai friend for everyone</p>
+            </div>
+            <div class="input-container">
+                <div id="attachment-display"></div>
+                <div class="input-box-wrapper">
+                    <textarea id="chat-input" class="input-box" placeholder="hello frende..." rows="1" autofocus></textarea>
+                    <button id="attachment-btn" class="icon-btn attachment-btn">
+                        <svg viewBox="0 0 24 20">
+                            <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v11.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
+                        </svg>
+                    </button>
+                    <input type="file" id="file-input" hidden multiple>
+                    <button id="mic-btn" class="icon-btn mic-btn">
+                        <svg id="mic-icon" viewBox="0 0 24 18">
+                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
+                        </svg>
+                    </button>
+                    <button id="send-btn" class="icon-btn send-btn" disabled>
+                        <svg id="send-icon" viewBox="0 0 24 18">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mode-buttons">
+                    <button class="mode-btn" id="main-folder-mode-btn">Folder Mode</button>
+                    <button class="mode-btn" id="main-conversation-mode-btn">Conversation Mode</button>
+                    <button class="mode-btn" id="main-flashcards-btn">Flashcards</button>
+                    <button class="mode-btn" id="main-language-teacher-btn">Language Teacher</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         const chatInput = document.getElementById('chat-input');
+        const micBtn = document.getElementById('mic-btn');
         const micIcon = document.getElementById('mic-icon');
-        const sendIcon = document.getElementById('send-icon');
-        const inputContainer = document.querySelector('.input-container');
-        const iconBtn = document.querySelector('.icon-btn');
+        const sendBtn = document.getElementById('send-btn');
+        const attachmentBtn = document.getElementById('attachment-btn');
+        const fileInput = document.getElementById('file-input');
+        const attachmentDisplay = document.getElementById('attachment-display');
+        const toggleBtn = document.getElementById('toggle-btn');
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        const header = document.getElementById('header');
 
-        const autoResizeTextarea = () => {
-            const initialHeight = chatInput.style.height;
-            chatInput.style.height = 'auto';
-            const scrollHeight = chatInput.scrollHeight;
-            const maxHeight = parseFloat(getComputedStyle(chatInput).maxHeight);
+        let attachedFiles = new Map();
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
 
-            if (scrollHeight > maxHeight) {
-                chatInput.style.height = maxHeight + 'px';
-                chatInput.style.overflowY = 'auto';
-            } else {
-                chatInput.style.height = scrollHeight + 'px';
-                chatInput.style.overflowY = 'hidden';
-            }
-
-            // Adjust icon position
-            const containerHeight = inputContainer.offsetHeight;
-            iconBtn.style.top = (containerHeight / 2) + 'px';
+        // Toggle sidebar visibility
+        const toggleSidebar = () => {
+            sidebar.classList.toggle('hidden');
+            mainContent.style.marginLeft = sidebar.classList.contains('hidden') ? '0' : '250px';
         };
 
-        chatInput.addEventListener('input', () => {
-            // Toggle icons based on input value
-            const hasValue = chatInput.value.trim().length > 0;
-            micIcon.style.display = hasValue ? 'none' : 'block';
-            sendIcon.style.display = hasValue ? 'block' : 'none';
+        // Auto-resize textarea
+        const autoResizeTextarea = () => {
+            chatInput.style.height = 'auto';
+            const computedStyle = getComputedStyle(chatInput);
+            const lineHeight = parseFloat(computedStyle.lineHeight);
+            const paddingTop = parseFloat(computedStyle.paddingTop);
+            const paddingBottom = parseFloat(computedStyle.paddingBottom);
+            const maxThreeLinesHeight = (lineHeight * 3) + paddingTop + paddingBottom;
 
-            // Auto-resize textarea
+            if (chatInput.scrollHeight > maxThreeLinesHeight) {
+                chatInput.style.height = maxThreeLinesHeight + 'px';
+                chatInput.style.overflowY = 'auto';
+            } else {
+                chatInput.style.height = chatInput.scrollHeight + 'px';
+                chatInput.style.overflowY = 'hidden';
+            }
+        };
+
+        // Update send button state
+        const updateSendButtonState = () => {
+            const hasContent = chatInput.value.trim().length > 0 || attachedFiles.size > 0;
+            sendBtn.disabled = !hasContent;
+        };
+
+        // Render attachments
+        const renderAttachments = () => {
+            attachmentDisplay.innerHTML = '';
+            if (attachedFiles.size > 0) {
+                attachmentDisplay.style.display = 'flex';
+                attachedFiles.forEach((file, name) => {
+                    const pill = document.createElement('div');
+                    pill.className = 'attachment-pill';
+
+                    const filenameSpan = document.createElement('span');
+                    filenameSpan.textContent = name;
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-attachment-btn';
+                    removeBtn.innerHTML = '×';
+                    removeBtn.onclick = () => {
+                        attachedFiles.delete(name);
+                        renderAttachments();
+                        updateSendButtonState();
+                    };
+
+                    pill.appendChild(filenameSpan);
+                    pill.appendChild(removeBtn);
+                    attachmentDisplay.appendChild(pill);
+                });
+            } else {
+                attachmentDisplay.style.display = 'none';
+            }
+        };
+
+        // Start/stop audio recording
+        const toggleRecording = async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const audioName = `recording-${Date.now()}.webm`;
+                        attachedFiles.set(audioName, audioBlob);
+                        renderAttachments();
+                        updateSendButtonState();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    micBtn.classList.add('mic-recording');
+                } catch (err) {
+                    console.error('Error accessing microphone:', err);
+                    alert('Could not access microphone. Please check permissions.');
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                micBtn.classList.remove('mic-recording');
+            }
+        };
+
+        // Event listeners
+        toggleBtn.addEventListener('click', toggleSidebar);
+
+        chatInput.addEventListener('input', () => {
             autoResizeTextarea();
+            updateSendButtonState();
         });
 
         chatInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                // Prevent newline on Enter
+            if (event.key === 'Enter' && !event.shiftKey && !sendBtn.disabled) {
                 event.preventDefault();
-                // Action for 'Enter' will be defined later
+                console.log('Send:', chatInput.value, attachedFiles);
+                chatInput.value = '';
+                attachedFiles.clear();
+                renderAttachments();
+                updateSendButtonState();
+                autoResizeTextarea();
             }
         });
 
-        // Initial resize and icon position
+        attachmentBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (files.length > 0) {
+                for (const file of files) {
+                    if (!attachedFiles.has(file.name)) {
+                        attachedFiles.set(file.name, file);
+                    }
+                }
+                renderAttachments();
+                updateSendButtonState();
+            }
+            fileInput.value = '';
+        });
+
+        micBtn.addEventListener('click', toggleRecording);
+
+        sendBtn.addEventListener('click', () => {
+            if (!sendBtn.disabled) {
+                console.log('Send:', chatInput.value, attachedFiles);
+                chatInput.value = '';
+                attachedFiles.clear();
+                renderAttachments();
+                updateSendButtonState();
+                autoResizeTextarea();
+            }
+        });
+
+        // Sidebar button placeholders
+        document.getElementById('new-chat-btn').addEventListener('click', () => console.log('New Chat clicked'));
+        document.getElementById('folder-mode-btn').addEventListener('click', () => console.log('Folder Mode clicked'));
+        document.getElementById('conversation-mode-btn').addEventListener('click', () => console.log('Conversation Mode clicked'));
+        document.getElementById('flashcards-btn').addEventListener('click', () => console.log('Flashcards clicked'));
+        document.getElementById('language-teacher-btn').addEventListener('click', () => console.log('Language Teacher clicked'));
+        document.getElementById('history-btn').addEventListener('click', () => console.log('History clicked'));
+
+        // Main page mode buttons placeholders
+        document.getElementById('main-folder-mode-btn').addEventListener('click', () => console.log('Main Folder Mode clicked'));
+        document.getElementById('main-conversation-mode-btn').addEventListener('click', () => console.log('Main Conversation Mode clicked'));
+        document.getElementById('main-flashcards-btn').addEventListener('click', () => console.log('Main Flashcards clicked'));
+        document.getElementById('main-language-teacher-btn').addEventListener('click', () => console.log('Main Language Teacher clicked'));
+
+        // Initial setup
         autoResizeTextarea();
+        updateSendButtonState();
     </script>
 </body>
 </html>
