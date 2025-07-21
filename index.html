@@ -1,482 +1,482 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>frende</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
-    <style>
-        body {
-            margin: 0;
-            height: 100vh;
-            display: flex;
-            background-color: #f4f6f8;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        }
-        .container {
-            display: flex;
-            width: 100%;
-            height: 100%;
-            position: relative;
-        }
-        .sidebar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            width: 160px; /* Reduced width */
-            background: linear-gradient(180deg, #f8fafc 0%, #e9ecef 100%);
-            border-right: 1px solid #e0e0e0;
-            display: flex;
-            flex-direction: column;
-            padding: 16px 10px 10px 10px;
-            transition: transform 0.3s ease;
-            transform: translateX(0);
-            padding-top: 50px;
-            z-index: 1;
-            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
-            font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
-        }
-        .sidebar.hidden {
-            transform: translateX(-100%);
-        }
-        .toggle-btn {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 5px;
-            z-index: 2;
-        }
-        .toggle-btn svg {
-            width: 24px;
-            height: 24px;
-            fill: #555;
-        }
-        .sidebar-btn {
-            background: rgba(255,255,255,0.7);
-            border: 1px solid #e0e0e0;
-            padding: 10px 10px;
-            text-align: left;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            color: #333;
-            border-radius: 8px;
-            margin: 6px 0;
-            transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-        }
-        .sidebar-btn:hover {
-            background: #f0f4fa;
-            border-color: #b0c4de;
-            box-shadow: 0 2px 8px rgba(0,123,255,0.07);
-        }
-        .separator {
-            border-top: 1px solid #e0e0e0;
-            margin: 12px 0;
-        }
-        .search-bar {
-            margin: 5px 0;
-            padding: 0 2px;
-        }
-        #history-search {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            font-size: 15px;
-            box-sizing: border-box;
-            background-color: #f8f9fa;
-            transition: border-color 0.2s;
-        }
-        #history-search:focus {
-            outline: none;
-            border-color: #007BFF;
-            box-shadow: 0 0 5px rgba(0, 123, 255, 0.2);
-        }
-        .main-content {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            transition: margin-left 0.3s ease;
-            position: relative;
-        }
-        .header {
-            position: absolute;
-            top: 20%;
-            left: 50%;
-            transform: translateX(-50%);
-            text-align: center;
-        }
-        .header h1 {
-            font-family: 'Liberation Sans Narrow', 'Liberation Sans', sans-serif;
-            font-size: 3.5em;
-            margin: 0;
-            color: #1a1a1a;
-        }
-        .header p {
-            font-size: 1.3em;
-            margin: 0;
-            color: #666;
-        }
-        .input-container {
-            position: relative;
-            width: 600px;
-            display: flex;
-            align-items: center;
-            margin-bottom: calc(30vh - 24px);
-            max-height: calc(50vh - 40px);
-            flex-direction: column;
-        }
-        #attachment-display {
-            display: none;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 8px;
-            align-self: flex-start;
-            width: 100%;
-        }
-        .attachment-pill {
-            display: flex;
-            align-items: center;
-            background-color: #e9ecef;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 14px;
-        }
-        .attachment-pill span {
-            max-width: 200px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .remove-attachment-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 0 0 0 8px;
-            font-size: 16px;
-            line-height: 1;
-            color: #555;
-        }
-        .input-box-wrapper {
-            position: relative;
-            width: 100%;
-            display: flex;
-            align-items: flex-end;
-        }
-        .input-box {
-            width: 100%;
-            min-height: 24px;
-            padding: 12px 80px 12px 50px;
-            font-size: 16px;
-            border: 1px solid #d0d0d0;
-            border-radius: 25px;
-            resize: none;
-            overflow-y: hidden;
-            box-sizing: border-box;
-            line-height: 1.5;
-            background-color: #ffffff;
-        }
-        .input-box:focus {
-            outline: none;
-            border-color: #007BFF;
-            box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-        }
-        .icon-btn {
-            position: absolute;
-            bottom: 10px;
-            background: none;
-            border: none;
-            padding: 5px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1;
-        }
-        .attachment-btn {
-            left: 10px;
-        }
-        .mic-btn {
-            right: 50px;
-        }
-        .send-btn {
-            right: 10px;
-        }
-        .icon-btn svg {
-            width: 24px;
-            height: 24px;
-            fill: #555;
-        }
-        .send-btn:disabled svg {
-            fill: #ccc;
-        }
-        .mic-recording svg {
-            fill: #ff0000;
-        }
-        .mode-buttons {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 20px;
-            width: 100%;
-        }
-        .mode-btn {
-            background-color: #fff;
-            color: #343a40;
-            border: 1.5px solid #b0c4de;
-            padding: 12px 0;
-            font-size: 17px;
-            font-weight: 600;
-            cursor: pointer;
-            border-radius: 10px;
-            text-align: center;
-            transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-            box-shadow: 0 1px 4px rgba(0,123,255,0.04);
-        }
-        .mode-btn:hover, .mode-btn:focus {
-            background-color: #f0f8ff;
-            border-color: #007BFF;
-            box-shadow: 0 2px 8px rgba(0,123,255,0.10);
-            outline: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>frende - Vanilla JS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+body, #root {
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  background-color: #f4f6f8;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+.container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  position: relative;
+}
+.toggle-btn {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+.toggle-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+.toggle-btn svg {
+  width: 24px;
+  height: 24px;
+  fill: #333;
+}
+.sidebar {
+  width: 160px;
+  min-width: 160px;
+  max-width: 160px;
+  background: linear-gradient(180deg, #f8fafc 0%, #e9ecef 100%);
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 10px 10px 10px;
+  padding-top: 60px;
+  z-index: 1;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+  transition: transform 0.3s ease;
+}
+.sidebar.hidden {
+  transform: translateX(-100%);
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+.main-content {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  min-height: 100vh;
+  transition: all 0.3s;
+  position: relative;
+  background: transparent;
+}
+.centered-content {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+.header.header-up {
+  text-align: center;
+  margin-bottom: 12px;
+  margin-top: 40px;
+}
+.header h1 {
+  font-family: 'Liberation Sans Narrow', 'Liberation Sans', sans-serif;
+  font-size: 3.5em;
+  margin: 0;
+  color: #1a1a1a;
+}
+.header p,
+.header .single-line {
+  font-size: 1.3em;
+  margin: 0;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.input-container.input-container-up {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  margin-top: 32px;
+}
+#attachment-display {
+  display: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-self: flex-start;
+  width: 100%;
+}
+#attachment-display.active {
+  display: flex !important;
+}
+.attachment-pill {
+  display: flex;
+  align-items: center;
+  background-color: #e9ecef;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+.attachment-pill span {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.remove-attachment-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0 0 8px;
+  font-size: 16px;
+  line-height: 1;
+  color: #555;
+}
+.input-box-wrapper.input-box-wrapper-up {
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  position: relative;
+}
+.input-box.input-box-up {
+  width: 100%;
+  min-height: 24px;
+  max-height: 96px;
+  padding: 12px 80px 12px 50px;
+  font-size: 16px;
+  border: 1px solid #d0d0d0;
+  border-radius: 25px;
+  resize: none;
+  overflow-y: auto;
+  box-sizing: border-box;
+  line-height: 1.5;
+  background-color: #ffffff;
+  margin-bottom: 0;
+  margin-top: 0;
+}
+.input-box:focus {
+  outline: none;
+  border-color: #007BFF;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+.icon-btn {
+  position: absolute;
+  bottom: 10px;
+  background: none;
+  border: none;
+  padding: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.attachment-btn {
+  left: 10px;
+}
+.mic-btn {
+  right: 50px;
+}
+.send-btn {
+  right: 10px;
+}
+.icon-btn svg {
+  width: 24px;
+  height: 24px;
+  fill: #555;
+}
+.send-btn:disabled svg {
+  fill: #ccc;
+}
+.mic-recording svg {
+  fill: #ff0000;
+}
+.app-btn {
+  background: #fff;
+  border: 1.5px solid #b0c4de;
+  padding: 10px 10px;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #343a40;
+  border-radius: 8px;
+  margin: 6px 0;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 4px rgba(0,123,255,0.04);
+  width: 100%;
+  text-align: center;
+}
+.app-btn:hover, .app-btn:focus {
+  background-color: #f0f8ff;
+  border-color: #007BFF;
+  box-shadow: 0 2px 8px rgba(0,123,255,0.10);
+  outline: none;
+}
+.separator {
+  border-top: 1px solid #e0e0e0;
+  margin: 12px 0;
+}
+.search-bar {
+  margin: 5px 0;
+  padding: 0 2px;
+}
+#history-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  font-size: 15px;
+  box-sizing: border-box;
+  background-color: #f8f9fa;
+  transition: border-color 0.2s;
+}
+#history-search:focus {
+  outline: none;
+  border-color: #007BFF;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.2);
+}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <button class="toggle-btn" id="toggle-btn">
-            <svg viewBox="0 0 24 24">
-                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-            </svg>
-        </button>
-        <div class="sidebar hidden" id="sidebar">
-            <button class="sidebar-btn" id="new-chat-btn">New Chat</button>
-            <button class="sidebar-btn" id="conversation-mode-btn">Interpreter</button>
-            <button class="sidebar-btn" id="flashcards-btn">Flashcards</button>
-            <button class="sidebar-btn" id="language-teacher-btn">Teacher</button>
-            <div class="separator"></div>
-            <div class="search-bar">
-                <input type="text" id="history-search" placeholder="Search History">
-            </div>
-        </div>
-        <div class="main-content" id="main-content">
-            <div id="header" class="header">
-                <h1>frende</h1>
-                <p>private on-device ai language companion</p>
-            </div>
-            <div class="input-container">
-                <div id="attachment-display"></div>
-                <div class="input-box-wrapper">
-                    <textarea id="chat-input" class="input-box" placeholder="hello frende..." rows="1" autofocus></textarea>
-                    <button id="attachment-btn" class="icon-btn attachment-btn">
-                        <svg viewBox="0 0 24 20">
-                            <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v11.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
-                        </svg>
-                    </button>
-                    <input type="file" id="file-input" hidden multiple>
-                    <button id="mic-btn" class="icon-btn mic-btn">
-                        <svg id="mic-icon" viewBox="0 0 24 18">
-                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
-                        </svg>
-                    </button>
-                    <button id="send-btn" class="icon-btn send-btn" disabled>
-                        <svg id="send-icon" viewBox="0 0 24 18">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="mode-buttons">
-                    <button class="mode-btn" id="main-conversation-mode-btn">Interpreter</button>
-                    <button class="mode-btn" id="main-flashcards-btn">Flashcards</button>
-                    <button class="mode-btn" id="main-language-teacher-btn">Teacher</button>
-                </div>
-            </div>
-        </div>
+<div id="root">
+  <div class="container">
+    <button class="toggle-btn" id="toggle-btn">
+      <svg viewBox="0 0 24 24">
+        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+      </svg>
+    </button>
+    <div class="sidebar" id="sidebar">
+      <button class="app-btn" id="new-chat-btn">New Chat</button>
+      <button class="app-btn" id="interpreter-btn">Interpreter</button>
+      <button class="app-btn" id="foldermode-btn">FolderMode</button>
+      <div class="separator"></div>
+      <div class="search-bar">
+        <input type="text" id="history-search" placeholder="Search History" />
+      </div>
     </div>
-    <script>
-        const chatInput = document.getElementById('chat-input');
-        const micBtn = document.getElementById('mic-btn');
-        const micIcon = document.getElementById('mic-icon');
-        const sendBtn = document.getElementById('send-btn');
-        const attachmentBtn = document.getElementById('attachment-btn');
-        const fileInput = document.getElementById('file-input');
-        const attachmentDisplay = document.getElementById('attachment-display');
-        const toggleBtn = document.getElementById('toggle-btn');
-        const sidebar = document.getElementById('sidebar');
-        const mainContent = document.getElementById('main-content');
-        const header = document.getElementById('header');
+    <div class="main-content" id="main-content">
+      <div class="centered-content">
+        <div class="header header-up">
+          <h1>frende</h1>
+          <p class="single-line">private on-device ai companion</p>
+        </div>
+        <div class="input-container input-container-up">
+          <div id="attachment-display"></div>
+          <div class="input-box-wrapper input-box-wrapper-up">
+            <textarea
+              id="chat-input"
+              class="input-box input-box-up"
+              placeholder="hello frende..."
+              rows="1"
+              autocomplete="off"
+            ></textarea>
+            <button
+              id="attachment-btn"
+              class="icon-btn attachment-btn"
+              type="button"
+            >
+              <svg viewBox="0 0 24 20">
+                <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v11.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" />
+              </svg>
+            </button>
+            <input
+              type="file"
+              id="file-input"
+              hidden
+              multiple
+            />
+            <button
+              id="mic-btn"
+              class="icon-btn mic-btn"
+              type="button"
+            >
+              <svg id="mic-icon" viewBox="0 0 24 18">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z" />
+              </svg>
+            </button>
+            <button
+              id="send-btn"
+              class="icon-btn send-btn"
+              type="button"
+              disabled
+            >
+              <svg id="send-icon" viewBox="0 0 24 18">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  // Sidebar toggle
+  document.getElementById('toggle-btn').onclick = function() {
+    document.getElementById('sidebar').classList.toggle('hidden');
+  };
 
-        let attachedFiles = new Map();
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let isRecording = false;
+  // Sidebar buttons (for demo)
+  document.getElementById('new-chat-btn').onclick = function() { console.log('New Chat clicked'); };
+  document.getElementById('interpreter-btn').onclick = function() { console.log('Interpreter clicked'); };
+  document.getElementById('foldermode-btn').onclick = function() { console.log('FolderMode clicked'); };
 
-        // Toggle sidebar visibility
-        const toggleSidebar = () => {
-            sidebar.classList.toggle('hidden');
-            mainContent.style.marginLeft = sidebar.classList.contains('hidden') ? '0' : '160px'; // Updated to match new sidebar width
+  // Attachments
+  let attachedFiles = new Map();
+
+  function renderAttachments() {
+    const display = document.getElementById('attachment-display');
+    display.innerHTML = '';
+    if (attachedFiles.size === 0) {
+      display.classList.remove('active');
+      return;
+    }
+    display.classList.add('active');
+    attachedFiles.forEach((file, name) => {
+      const pill = document.createElement('div');
+      pill.className = 'attachment-pill';
+      const span = document.createElement('span');
+      span.textContent = name;
+      const btn = document.createElement('button');
+      btn.className = 'remove-attachment-btn';
+      btn.textContent = '×';
+      btn.onclick = function() {
+        attachedFiles.delete(name);
+        renderAttachments();
+        updateSendBtn();
+      };
+      pill.appendChild(span);
+      pill.appendChild(btn);
+      display.appendChild(pill);
+    });
+  }
+
+  // File input
+  document.getElementById('attachment-btn').onclick = function() {
+    document.getElementById('file-input').click();
+  };
+  document.getElementById('file-input').onchange = function(e) {
+    const files = e.target.files;
+    for (let i = 0; i < files.length; ++i) {
+      if (!attachedFiles.has(files[i].name)) {
+        attachedFiles.set(files[i].name, files[i]);
+      }
+    }
+    renderAttachments();
+    updateSendBtn();
+    e.target.value = '';
+  };
+
+  // Audio recording
+  let isRecording = false;
+  let mediaRecorder = null;
+  let audioChunks = [];
+  document.getElementById('mic-btn').onclick = async function() {
+    const micBtn = document.getElementById('mic-btn');
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new window.MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
         };
-
-        // Auto-resize textarea
-        const autoResizeTextarea = () => {
-            chatInput.style.height = 'auto';
-            const computedStyle = getComputedStyle(chatInput);
-            const lineHeight = parseFloat(computedStyle.lineHeight);
-            const paddingTop = parseFloat(computedStyle.paddingTop);
-            const paddingBottom = parseFloat(computedStyle.paddingBottom);
-            const maxThreeLinesHeight = (lineHeight * 3) + paddingTop + paddingBottom;
-
-            if (chatInput.scrollHeight > maxThreeLinesHeight) {
-                chatInput.style.height = maxThreeLinesHeight + 'px';
-                chatInput.style.overflowY = 'auto';
-            } else {
-                chatInput.style.height = chatInput.scrollHeight + 'px';
-                chatInput.style.overflowY = 'hidden';
-            }
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          const audioName = `recording-${Date.now()}.webm`;
+          attachedFiles.set(audioName, audioBlob);
+          renderAttachments();
+          updateSendBtn();
+          stream.getTracks().forEach((track) => track.stop());
         };
+        mediaRecorder.start();
+        isRecording = true;
+        micBtn.classList.add('mic-recording');
+      } catch (err) {
+        alert("Could not access microphone. Please check permissions.");
+      }
+    } else {
+      if (mediaRecorder) mediaRecorder.stop();
+      isRecording = false;
+      micBtn.classList.remove('mic-recording');
+    }
+  };
 
-        // Update send button state
-        const updateSendButtonState = () => {
-            const hasContent = chatInput.value.trim().length > 0 || attachedFiles.size > 0;
-            sendBtn.disabled = !hasContent;
-        };
+  // Send logic
+  function updateSendBtn() {
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    if (chatInput.value.trim().length > 0 || attachedFiles.size > 0) {
+      sendBtn.disabled = false;
+    } else {
+      sendBtn.disabled = true;
+    }
+  }
 
-        // Render attachments
-        const renderAttachments = () => {
-            attachmentDisplay.innerHTML = '';
-            if (attachedFiles.size > 0) {
-                attachmentDisplay.style.display = 'flex';
-                attachedFiles.forEach((file, name) => {
-                    const pill = document.createElement('div');
-                    pill.className = 'attachment-pill';
+  function autoResizeTextarea() {
+    const textarea = document.getElementById('chat-input');
+    textarea.style.height = "auto";
+    const computedStyle = window.getComputedStyle(textarea);
+    const lineHeight = parseFloat(computedStyle.lineHeight);
+    const paddingTop = parseFloat(computedStyle.paddingTop);
+    const paddingBottom = parseFloat(computedStyle.paddingBottom);
+    const maxThreeLinesHeight = lineHeight * 3 + paddingTop + paddingBottom;
+    if (textarea.scrollHeight > maxThreeLinesHeight) {
+      textarea.style.height = maxThreeLinesHeight + "px";
+      textarea.style.overflowY = "auto";
+    } else {
+      textarea.style.height = textarea.scrollHeight + "px";
+      textarea.style.overflowY = "hidden";
+    }
+  }
 
-                    const filenameSpan = document.createElement('span');
-                    filenameSpan.textContent = name;
+  document.getElementById('chat-input').addEventListener('input', function() {
+    autoResizeTextarea();
+    updateSendBtn();
+  });
 
-                    const removeBtn = document.createElement('button');
-                    removeBtn.className = 'remove-attachment-btn';
-                    removeBtn.innerHTML = '×';
-                    removeBtn.onclick = () => {
-                        attachedFiles.delete(name);
-                        renderAttachments();
-                        updateSendButtonState();
-                    };
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      const sendBtn = document.getElementById('send-btn');
+      if (!sendBtn.disabled) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    }
+  });
 
-                    pill.appendChild(filenameSpan);
-                    pill.appendChild(removeBtn);
-                    attachmentDisplay.appendChild(pill);
-                });
-            } else {
-                attachmentDisplay.style.display = 'none';
-            }
-        };
+  document.getElementById('send-btn').onclick = function() {
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput.value.trim().length === 0 && attachedFiles.size === 0) return;
+    // Replace with your send logic
+    console.log("Send:", chatInput.value, attachedFiles);
+    chatInput.value = '';
+    attachedFiles = new Map();
+    renderAttachments();
+    updateSendBtn();
+    autoResizeTextarea();
+  };
 
-        // Start/stop audio recording
-        const toggleRecording = async () => {
-            if (!isRecording) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-
-                    mediaRecorder.ondataavailable = (event) => {
-                        audioChunks.push(event.data);
-                    };
-
-                    mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        const audioName = `recording-${Date.now()}.webm`;
-                        attachedFiles.set(audioName, audioBlob);
-                        renderAttachments();
-                        updateSendButtonState();
-                        stream.getTracks().forEach(track => track.stop());
-                    };
-
-                    mediaRecorder.start();
-                    isRecording = true;
-                    micBtn.classList.add('mic-recording');
-                } catch (err) {
-                    console.error('Error accessing microphone:', err);
-                    alert('Could not access microphone. Please check permissions.');
-                }
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                micBtn.classList.remove('mic-recording');
-            }
-        };
-
-        // Event listeners
-        toggleBtn.addEventListener('click', toggleSidebar);
-
-        chatInput.addEventListener('input', () => {
-            autoResizeTextarea();
-            updateSendButtonState();
-        });
-
-        chatInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !sendBtn.disabled) {
-                event.preventDefault();
-                console.log('Send:', chatInput.value, attachedFiles);
-                chatInput.value = '';
-                attachedFiles.clear();
-                renderAttachments();
-                updateSendButtonState();
-                autoResizeTextarea();
-            }
-        });
-
-        attachmentBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        fileInput.addEventListener('change', (event) => {
-            const files = event.target.files;
-            if (files.length > 0) {
-                for (const file of files) {
-                    if (!attachedFiles.has(file.name)) {
-                        attachedFiles.set(file.name, file);
-                    }
-                }
-                renderAttachments();
-                updateSendButtonState();
-            }
-            fileInput.value = '';
-        });
-
-        micBtn.addEventListener('click', toggleRecording);
-
-        sendBtn.addEventListener('click', () => {
-            if (!sendBtn.disabled) {
-                console.log('Send:', chatInput.value, attachedFiles);
-                chatInput.value = '';
-                attachedFiles.clear();
-                renderAttachments();
-                updateSendButtonState();
-                autoResizeTextarea();
-            }
-        });
-
-        // Sidebar button placeholders
-        document.getElementById('new-chat-btn').addEventListener('click', () => console.log('New Chat clicked'));
-        document.getElementById('conversation-mode-btn').addEventListener('click', () => console.log('Two-Way Translation clicked'));
-        document.getElementById('flashcards-btn').addEventListener('click', () => console.log('Flashcards clicked'));
-        document.getElementById('language-teacher-btn').addEventListener('click', () => console.log('Language Teacher clicked'));
-        // Note: History button replaced with search bar, no click listener added (can be extended later)
-
-        // Main page mode buttons placeholders
-        document.getElementById('main-conversation-mode-btn').addEventListener('click', () => console.log('Main Two-Way Translation clicked'));
-        document.getElementById('main-flashcards-btn').addEventListener('click', () => console.log('Main Flashcards clicked'));
-        document.getElementById('main-language-teacher-btn').addEventListener('click', () => console.log('Main Language Teacher clicked'));
-
-        // Initial setup
-        autoResizeTextarea();
-        updateSendButtonState();
-    </script>
+  // Initial
+  autoResizeTextarea();
+  updateSendBtn();
+})();
+</script>
 </body>
 </html>
