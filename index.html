@@ -2,480 +2,642 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>frende - Vanilla JS</title>
+  <title>frende</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+* {
+  box-sizing: border-box;
+}
+
 body, #root {
   height: 100vh;
   margin: 0;
   padding: 0;
   width: 100vw;
-  background-color: #f4f6f8;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
 .container {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
   height: 100vh;
   width: 100vw;
-  position: relative;
+  padding: 20px 48px 48px;
 }
-.toggle-btn {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 2;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
-}
-.toggle-btn:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-.toggle-btn svg {
-  width: 24px;
-  height: 24px;
-  fill: #333;
-}
-.sidebar {
-  width: 160px;
-  min-width: 160px;
-  max-width: 160px;
-  background: linear-gradient(180deg, #f8fafc 0%, #e9ecef 100%);
-  border-right: 1px solid #e0e0e0;
-  display: flex;
-  flex-direction: column;
-  padding: 16px 10px 10px 10px;
-  padding-top: 60px;
-  z-index: 1;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
-  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
-  transition: transform 0.3s ease;
-}
-.sidebar.hidden {
-  transform: translateX(-100%);
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-}
-.main-content {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-width: 0;
-  min-height: 100vh;
-  transition: all 0.3s;
-  position: relative;
-  background: transparent;
-}
-.centered-content {
+
+.content-wrapper {
   width: 100%;
   max-width: 600px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
 }
-.header.header-up {
+
+.header {
   text-align: center;
-  margin-bottom: 12px;
-  margin-top: 40px;
+  margin-top: 10px;
+  margin-bottom: 50px;
 }
+
 .header h1 {
-  font-family: 'Liberation Sans Narrow', 'Liberation Sans', sans-serif;
-  font-size: 3.5em;
-  margin: 0;
+  font-size: clamp(48px, 8vw, 72px);
+  font-weight: 250;
+  margin: 0 0 0 0;
   color: #1a1a1a;
+  letter-spacing: -0.02em;
 }
-.header p,
-.header .single-line {
-  font-size: 1.3em;
+
+.header p {
+  font-size: 18px;
   margin: 0;
-  color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #666666;
+  font-weight: 400;
 }
-.input-container.input-container-up {
-  position: relative;
+
+.input-section {
   width: 100%;
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  margin-top: 32px;
 }
-#attachment-display {
+
+.attachments {
   display: none;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 8px;
-  align-self: flex-start;
-  width: 100%;
+  margin-bottom: 16px;
 }
-#attachment-display.active {
-  display: flex !important;
+
+.attachments.active {
+  display: flex;
 }
+
 .attachment-pill {
   display: flex;
   align-items: center;
-  background-color: #e9ecef;
-  padding: 4px 8px;
-  border-radius: 12px;
+  background: #f5f5f5;
+  padding: 8px 12px;
+  border-radius: 16px;
   font-size: 14px;
+  color: #666666;
 }
+
 .attachment-pill span {
-  max-width: 200px;
+  max-width: 150px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.remove-attachment-btn {
+
+.remove-attachment {
   background: none;
   border: none;
   cursor: pointer;
   padding: 0 0 0 8px;
+  color: #999999;
   font-size: 16px;
   line-height: 1;
-  color: #555;
 }
-.input-box-wrapper.input-box-wrapper-up {
-  width: 100%;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-end;
+
+.remove-attachment:hover {
+  color: #666666;
+}
+
+.input-container {
   position: relative;
-}
-.input-box.input-box-up {
   width: 100%;
-  min-height: 24px;
-  max-height: 96px;
-  padding: 12px 80px 12px 50px;
+  margin-bottom: 20px;
+}
+
+.input-field {
+  width: 100%;
+  min-height: 56px;
+  max-height: 120px;
+  padding: 16px 120px 16px 56px;
   font-size: 16px;
-  border: 1px solid #d0d0d0;
-  border-radius: 25px;
+  font-family: inherit;
+  border: 1px solid #e5e5e5;
+  border-radius: 28px;
   resize: none;
-  overflow-y: auto;
-  box-sizing: border-box;
-  line-height: 1.5;
-  background-color: #ffffff;
-  margin-bottom: 0;
-  margin-top: 0;
+  background: #ffffff;
+  transition: all 200ms ease;
+  line-height: 1.8;
 }
-.input-box:focus {
+
+.input-field:focus {
   outline: none;
-  border-color: #007BFF;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+  border-color: #0066cc;
+  border-width: 2px;
 }
-.icon-btn {
+
+.input-field::placeholder {
+  color: #999999;
+}
+
+.input-controls {
   position: absolute;
-  bottom: 10px;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-button {
+  width: 40px;
+  height: 40px;
   background: none;
   border: none;
-  padding: 5px;
+  border-radius: 20px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  transition: all 200ms ease;
 }
-.attachment-btn {
-  left: 10px;
+
+.control-button:hover {
+  background: #f5f5f5;
 }
-.mic-btn {
-  right: 50px;
+
+.control-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
-.send-btn {
-  right: 10px;
+
+.control-button:disabled:hover {
+  background: none;
 }
-.icon-btn svg {
-  width: 24px;
-  height: 24px;
-  fill: #555;
+
+.control-button svg {
+  width: 20px;
+  height: 20px;
+  fill: #666666;
 }
-.send-btn:disabled svg {
-  fill: #ccc;
+
+.send-button {
+  background: #0066cc;
 }
-.mic-recording svg {
-  fill: #ff0000;
+
+.send-button:hover:not(:disabled) {
+  background: #0056b3;
 }
-.app-btn {
-  background: #fff;
-  border: 1.5px solid #b0c4de;
-  padding: 10px 10px;
-  text-align: left;
-  font-size: 15px;
-  font-weight: 600;
+
+.send-button svg {
+  fill: #ffffff;
+}
+
+.send-button:disabled {
+  background: #e5e5e5;
+}
+
+.send-button:disabled svg {
+  fill: #999999;
+}
+
+.attachment-button {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  border-radius: 20px;
   cursor: pointer;
-  color: #343a40;
-  border-radius: 8px;
-  margin: 6px 0;
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 1px 4px rgba(0,123,255,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 200ms ease;
+}
+
+.attachment-button:hover {
+  background: #f5f5f5;
+}
+
+.attachment-button svg {
+  width: 20px;
+  height: 20px;
+  fill: #666666;
+}
+
+.recording {
+  background: #ff4444 !important;
+}
+
+.recording svg {
+  fill: #ffffff !important;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 16px;
   width: 100%;
+  margin-bottom: 16px;
+}
+
+.action-button {
+  flex: 1;
+  padding: 14px 24px;
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 200ms ease;
   text-align: center;
 }
-.app-btn:hover, .app-btn:focus {
-  background-color: #f0f8ff;
-  border-color: #007BFF;
-  box-shadow: 0 2px 8px rgba(0,123,255,0.10);
-  outline: none;
+
+.action-button:hover {
+  background: #f8f9fa;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
-.separator {
-  border-top: 1px solid #e0e0e0;
-  margin: 12px 0;
+
+.action-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
-.search-bar {
-  margin: 5px 0;
-  padding: 0 2px;
-}
-#history-search {
+
+.create-job-button {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-  font-size: 15px;
-  box-sizing: border-box;
-  background-color: #f8f9fa;
-  transition: border-color 0.2s;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 200ms ease;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.2);
+  margin-bottom: 16px;
 }
-#history-search:focus {
-  outline: none;
-  border-color: #007BFF;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.2);
+
+.create-job-button:hover {
+  background: linear-gradient(135deg, #0056b3 0%, #003d7a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 102, 204, 0.3);
+}
+
+.create-job-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.2);
+}
+
+.secondary-buttons {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.secondary-button {
+  flex: 1;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666666;
+  cursor: pointer;
+  transition: all 200ms ease;
+  text-align: center;
+}
+
+.secondary-button:hover {
+  background: #f8f9fa;
+  border-color: #d1d5db;
+  color: #1a1a1a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.secondary-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 30px 24px 24px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .secondary-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .header h1 {
+    font-size: clamp(36px, 10vw, 48px);
+  }
+  
+  .header {
+    margin-bottom: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 20px 16px 16px;
+  }
+  
+  .input-field {
+    padding: 14px 100px 14px 48px;
+    min-height: 48px;
+  }
+  
+  .attachment-button,
+  .control-button {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .control-button svg,
+  .attachment-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .secondary-buttons {
+    gap: 8px;
+  }
+  
+  .secondary-button {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+}
+
+#file-input {
+  display: none;
 }
   </style>
 </head>
 <body>
 <div id="root">
   <div class="container">
-    <button class="toggle-btn" id="toggle-btn">
-      <svg viewBox="0 0 24 24">
-        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
-      </svg>
-    </button>
-    <div class="sidebar" id="sidebar">
-      <button class="app-btn" id="new-chat-btn">New Chat</button>
-      <button class="app-btn" id="interpreter-btn">Interpreter</button>
-      <button class="app-btn" id="foldermode-btn">FolderMode</button>
-      <div class="separator"></div>
-      <div class="search-bar">
-        <input type="text" id="history-search" placeholder="Search History" />
+    <div class="content-wrapper">
+      <div class="header">
+        <h1>frende</h1>
+        <p>private on-device ai companion</p>
       </div>
-    </div>
-    <div class="main-content" id="main-content">
-      <div class="centered-content">
-        <div class="header header-up">
-          <h1>frende</h1>
-          <p class="single-line">private on-device ai companion</p>
-        </div>
-        <div class="input-container input-container-up">
-          <div id="attachment-display"></div>
-          <div class="input-box-wrapper input-box-wrapper-up">
-            <textarea
-              id="chat-input"
-              class="input-box input-box-up"
-              placeholder="hello frende..."
-              rows="1"
-              autocomplete="off"
-            ></textarea>
-            <button
-              id="attachment-btn"
-              class="icon-btn attachment-btn"
-              type="button"
-            >
-              <svg viewBox="0 0 24 20">
-                <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v11.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" />
+      
+      <div class="input-section">
+        <div class="attachments" id="attachment-display"></div>
+        
+        <div class="input-container">
+          <button class="attachment-button" id="attachment-btn">
+            <svg viewBox="0 0 24 24">
+              <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v11.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
+            </svg>
+          </button>
+          
+          <textarea
+            id="chat-input"
+            class="input-field"
+            placeholder="hello frende..."
+            rows="1"
+          ></textarea>
+          
+          <div class="input-controls">
+            <button class="control-button" id="mic-btn">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
               </svg>
             </button>
-            <input
-              type="file"
-              id="file-input"
-              hidden
-              multiple
-            />
-            <button
-              id="mic-btn"
-              class="icon-btn mic-btn"
-              type="button"
-            >
-              <svg id="mic-icon" viewBox="0 0 24 18">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z" />
-              </svg>
-            </button>
-            <button
-              id="send-btn"
-              class="icon-btn send-btn"
-              type="button"
-              disabled
-            >
-              <svg id="send-icon" viewBox="0 0 24 18">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            
+            <button class="control-button send-button" id="send-btn" disabled>
+              <svg viewBox="0 0 24 24">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
               </svg>
             </button>
           </div>
+          
+          <input type="file" id="file-input" multiple hidden>
+        </div>
+        
+        <div class="action-buttons">
+          <button class="action-button" id="interpreter-btn">Interpreter</button>
+          <button class="action-button" id="foldermode-btn">Folder Cruncher</button>
+        </div>
+        
+        <button class="create-job-button" id="create-job-btn">Create AI Job</button>
+        
+        <div class="secondary-buttons">
+          <button class="secondary-button" id="translator-btn">Translator</button>
+          <button class="secondary-button" id="teacher-btn">Lang. Teacher</button>
+          <button class="secondary-button" id="quickie-btn">Quickie</button>
         </div>
       </div>
     </div>
   </div>
 </div>
+
 <script>
 (function() {
-  // Sidebar toggle
-  document.getElementById('toggle-btn').onclick = function() {
-    document.getElementById('sidebar').classList.toggle('hidden');
-  };
-
-  // Sidebar buttons (for demo)
-  document.getElementById('new-chat-btn').onclick = function() { console.log('New Chat clicked'); };
-  document.getElementById('interpreter-btn').onclick = function() { console.log('Interpreter clicked'); };
-  document.getElementById('foldermode-btn').onclick = function() { console.log('FolderMode clicked'); };
-
-  // Attachments
   let attachedFiles = new Map();
+  let isRecording = false;
+  let mediaRecorder = null;
+  let audioChunks = [];
 
+  // Auto-focus on input field when page loads
+  window.addEventListener('load', () => {
+    document.getElementById('chat-input').focus();
+  });
+
+  // Navigation buttons
+  document.getElementById('interpreter-btn').addEventListener('click', () => {
+    console.log('Interpreter clicked');
+  });
+  
+  document.getElementById('foldermode-btn').addEventListener('click', () => {
+    console.log('Folder Cruncher clicked');
+  });
+  
+  document.getElementById('create-job-btn').addEventListener('click', () => {
+    console.log('Create AI Job clicked');
+  });
+  
+  document.getElementById('translator-btn').addEventListener('click', () => {
+    console.log('Translator clicked');
+  });
+  
+  document.getElementById('teacher-btn').addEventListener('click', () => {
+    console.log('Lang. Teacher clicked');
+  });
+  
+  document.getElementById('quickie-btn').addEventListener('click', () => {
+    console.log('Quickie clicked');
+  });
+
+  // File attachments
   function renderAttachments() {
     const display = document.getElementById('attachment-display');
     display.innerHTML = '';
+    
     if (attachedFiles.size === 0) {
       display.classList.remove('active');
       return;
     }
+    
     display.classList.add('active');
+    
     attachedFiles.forEach((file, name) => {
       const pill = document.createElement('div');
       pill.className = 'attachment-pill';
+      
       const span = document.createElement('span');
       span.textContent = name;
+      
       const btn = document.createElement('button');
-      btn.className = 'remove-attachment-btn';
+      btn.className = 'remove-attachment';
       btn.textContent = '×';
       btn.onclick = function() {
         attachedFiles.delete(name);
         renderAttachments();
-        updateSendBtn();
+        updateSendButton();
       };
+      
       pill.appendChild(span);
       pill.appendChild(btn);
       display.appendChild(pill);
     });
   }
 
-  // File input
-  document.getElementById('attachment-btn').onclick = function() {
+  // File input handler
+  document.getElementById('attachment-btn').addEventListener('click', () => {
     document.getElementById('file-input').click();
-  };
-  document.getElementById('file-input').onchange = function(e) {
+  });
+
+  document.getElementById('file-input').addEventListener('change', (e) => {
     const files = e.target.files;
-    for (let i = 0; i < files.length; ++i) {
-      if (!attachedFiles.has(files[i].name)) {
-        attachedFiles.set(files[i].name, files[i]);
+    for (let file of files) {
+      if (!attachedFiles.has(file.name)) {
+        attachedFiles.set(file.name, file);
       }
     }
     renderAttachments();
-    updateSendBtn();
+    updateSendButton();
     e.target.value = '';
-  };
+  });
 
   // Audio recording
-  let isRecording = false;
-  let mediaRecorder = null;
-  let audioChunks = [];
-  document.getElementById('mic-btn').onclick = async function() {
+  document.getElementById('mic-btn').addEventListener('click', async () => {
     const micBtn = document.getElementById('mic-btn');
+    
     if (!isRecording) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new window.MediaRecorder(stream);
+        mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
+        
         mediaRecorder.ondataavailable = (event) => {
           audioChunks.push(event.data);
         };
+        
         mediaRecorder.onstop = () => {
           const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
           const audioName = `recording-${Date.now()}.webm`;
           attachedFiles.set(audioName, audioBlob);
           renderAttachments();
-          updateSendBtn();
-          stream.getTracks().forEach((track) => track.stop());
+          updateSendButton();
+          stream.getTracks().forEach(track => track.stop());
         };
+        
         mediaRecorder.start();
         isRecording = true;
-        micBtn.classList.add('mic-recording');
+        micBtn.classList.add('recording');
       } catch (err) {
         alert("Could not access microphone. Please check permissions.");
       }
     } else {
       if (mediaRecorder) mediaRecorder.stop();
       isRecording = false;
-      micBtn.classList.remove('mic-recording');
+      micBtn.classList.remove('recording');
     }
-  };
+  });
 
-  // Send logic
-  function updateSendBtn() {
+  // Input handling
+  function updateSendButton() {
     const chatInput = document.getElementById('chat-input');
     const sendBtn = document.getElementById('send-btn');
-    if (chatInput.value.trim().length > 0 || attachedFiles.size > 0) {
-      sendBtn.disabled = false;
-    } else {
-      sendBtn.disabled = true;
-    }
+    const hasText = chatInput.value.trim().length > 0;
+    const hasFiles = attachedFiles.size > 0;
+    
+    sendBtn.disabled = !hasText && !hasFiles;
   }
 
   function autoResizeTextarea() {
     const textarea = document.getElementById('chat-input');
-    textarea.style.height = "auto";
-    const computedStyle = window.getComputedStyle(textarea);
-    const lineHeight = parseFloat(computedStyle.lineHeight);
-    const paddingTop = parseFloat(computedStyle.paddingTop);
-    const paddingBottom = parseFloat(computedStyle.paddingBottom);
-    const maxThreeLinesHeight = lineHeight * 3 + paddingTop + paddingBottom;
-    if (textarea.scrollHeight > maxThreeLinesHeight) {
-      textarea.style.height = maxThreeLinesHeight + "px";
-      textarea.style.overflowY = "auto";
+    textarea.style.height = 'auto';
+    
+    const maxHeight = 120; // 3 lines approximately
+    if (textarea.scrollHeight > maxHeight) {
+      textarea.style.height = maxHeight + 'px';
+      textarea.style.overflowY = 'auto';
     } else {
-      textarea.style.height = textarea.scrollHeight + "px";
-      textarea.style.overflowY = "hidden";
+      textarea.style.height = textarea.scrollHeight + 'px';
+      textarea.style.overflowY = 'hidden';
     }
   }
 
-  document.getElementById('chat-input').addEventListener('input', function() {
+  // Input event listeners
+  const chatInput = document.getElementById('chat-input');
+  
+  chatInput.addEventListener('input', () => {
     autoResizeTextarea();
-    updateSendBtn();
+    updateSendButton();
   });
 
-  document.getElementById('chat-input').addEventListener('keydown', function(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       const sendBtn = document.getElementById('send-btn');
       if (!sendBtn.disabled) {
         e.preventDefault();
-        sendBtn.click();
+        sendMessage();
       }
     }
   });
 
-  document.getElementById('send-btn').onclick = function() {
+  // Send message
+  function sendMessage() {
     const chatInput = document.getElementById('chat-input');
-    if (chatInput.value.trim().length === 0 && attachedFiles.size === 0) return;
+    const text = chatInput.value.trim();
+    
+    if (!text && attachedFiles.size === 0) return;
+    
     // Replace with your send logic
-    console.log("Send:", chatInput.value, attachedFiles);
+    console.log("Sending:", { text, files: attachedFiles });
+    
+    // Clear input
     chatInput.value = '';
     attachedFiles = new Map();
     renderAttachments();
-    updateSendBtn();
+    updateSendButton();
     autoResizeTextarea();
-  };
+  }
 
-  // Initial
+  document.getElementById('send-btn').addEventListener('click', sendMessage);
+
+  // Initialize
   autoResizeTextarea();
-  updateSendBtn();
+  updateSendButton();
 })();
 </script>
 </body>
