@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemma 3n E2B Local AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gemma 3n E2B Local AI</h1>
+            <p>Offline Multimodal AI Assistant</p>
+            <div id="status" class="status">Checking connection...</div>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="text">Text Only</button>
+                    <button class="tab-btn" data-tab="multimodal">Multimodal</button>
+                </div>
+
+                <div id="text-tab" class="tab-content active">
+                    <form id="text-form">
+                        <div class="form-group">
+                            <label for="text-input">Enter your message:</label>
+                            <textarea 
+                                id="text-input" 
+                                name="text" 
+                                placeholder="Ask me anything..."
+                                rows="4"
+                                required
+                            ></textarea>
+                        </div>
+                        <button type="submit" class="btn-primary">Generate Response</button>
+                    </form>
+                </div>
+
+                <div id="multimodal-tab" class="tab-content">
+                    <form id="multimodal-form" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="multimodal-text">Enter your message:</label>
+                            <textarea 
+                                id="multimodal-text" 
+                                name="text" 
+                                placeholder="Describe what you want me to analyze..."
+                                rows="3"
+                                required
+                            ></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="image-input">Upload Image (optional):</label>
+                            <input type="file" id="image-input" name="image" accept="image/*">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="audio-input">Upload Audio (optional):</label>
+                            <input type="file" id="audio-input" name="audio" accept="audio/*">
+                        </div>
+                        
+                        <button type="submit" class="btn-primary">Generate Response</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="output-section">
+                <h3>Response:</h3>
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Generating response... This may take 10-30 seconds on CPU.</p>
+                </div>
+                <div id="response" class="response-box">
+                    <p class="placeholder">Your AI response will appear here...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
