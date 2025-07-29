@@ -323,37 +323,22 @@ async def health_check():
         "cache_dir": str(inference_engine.cache_dir)
     }
 
-@app.post("/api/generate/text")
-async def generate_text(text: str = Form(...), max_tokens: int = Form(1024)):
-    """Generate text-only response"""
-    max_tokens = min(max_tokens, 32768)
-    
-    messages = [
-        {
-            "role": "user",
-            "content": [{"type": "text", "text": text}]
-        }
-    ]
-    
-    response = await inference_engine.generate_response(messages, max_new_tokens=max_tokens)
-    return {"response": response, "type": "text"}
-
-@app.post("/api/generate/multimodal")
-async def generate_multimodal(
+@app.post("/api/generate")
+async def generate_response(
     text: str = Form(...),
     image: UploadFile = File(None),
     audio: UploadFile = File(None),
-    max_tokens: int = Form(1024)
+    max_tokens: int = Form(32768)  # Fixed: was 32678
 ):
-    """Generate multimodal response"""
+    """Single unified endpoint for any modality combination"""
     max_tokens = min(max_tokens, 32768)
     
     content = [{"type": "text", "text": text}]
     temp_files = []
     
     try:
-        # Handle image
-        if image:
+        # Handle image if provided
+        if image and image.filename:  # Check filename to avoid empty uploads
             if not image.content_type.startswith("image/"):
                 raise HTTPException(status_code=400, detail="Invalid image format")
             
@@ -362,15 +347,14 @@ async def generate_multimodal(
                 tmp_file.write(content_bytes)
                 temp_files.append(tmp_file.name)
             
-            # Load and add image
             img = Image.open(temp_files[-1])
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             content.append({"type": "image", "image": img})
             logger.info(f"Image processed: {img.size}")
         
-        # Handle audio
-        if audio:
+        # Handle audio if provided  
+        if audio and audio.filename:  # Check filename to avoid empty uploads
             if not audio.content_type.startswith("audio/"):
                 raise HTTPException(status_code=400, detail="Invalid audio format")
             
@@ -379,20 +363,18 @@ async def generate_multimodal(
                 tmp_file.write(content_bytes)
                 temp_files.append(tmp_file.name)
             
-            # Add audio path directly (processor handles loading)
             content.append({"type": "audio", "audio": temp_files[-1]})
-            logger.info(f"Audio file saved: {temp_files[-1]}")
+            logger.info(f"Audio file processed: {temp_files[-1]}")
         
         messages = [{"role": "user", "content": content}]
         response = await inference_engine.generate_response(messages, max_new_tokens=max_tokens)
         
         return {
-            "response": response, 
-            "type": "multimodal",
-            "modalities": {
+            "response": response,
+            "modalities_used": {
                 "text": True,
-                "image": image is not None,
-                "audio": audio is not None
+                "image": image is not None and image.filename,
+                "audio": audio is not None and audio.filename
             }
         }
         
@@ -403,6 +385,7 @@ async def generate_multimodal(
                 os.unlink(temp_file)
             except FileNotFoundError:
                 pass
+
 
 # Serve static files
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
