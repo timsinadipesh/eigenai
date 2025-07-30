@@ -328,7 +328,7 @@ async def generate_response(
     text: str = Form(...),
     image: UploadFile = File(None),
     audio: UploadFile = File(None),
-    max_tokens: int = Form(32768)  # Fixed: was 32678
+    max_tokens: int = Form(32768)
 ):
     """Single unified endpoint for any modality combination"""
     max_tokens = min(max_tokens, 32768)
