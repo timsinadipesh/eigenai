@@ -558,12 +558,12 @@ class LandingPage {
       ).then((filesData) => {
         chatData.files = filesData;
         sessionStorage.setItem('chatTransition', JSON.stringify(chatData));
-        window.location.href = '/chat.html';
+        window.location.href = 'static/chat.html';
       });
     } else {
       // Just go to chat with mode
       sessionStorage.setItem('chatTransition', JSON.stringify({ mode, timestamp: Date.now() }));
-      window.location.href = '/chat.html';
+      window.location.href = 'static/chat.html';
     }
   }
 
