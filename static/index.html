@@ -14,7 +14,7 @@ body, #root {
   margin: 0;
   padding: 0;
   width: 100vw;
-  background-color: #ffffff;
+  background: linear-gradient(135deg, #fefefe 0%, #f8f9fa 50%, #f5f7fa 100%);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -34,7 +34,7 @@ body, #root {
 
 .content-wrapper {
   width: 100%;
-  max-width: 600px;
+  max-width: 580px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -43,22 +43,27 @@ body, #root {
 .header {
   text-align: center;
   margin-top: 10px;
-  margin-bottom: 50px;
+  margin-bottom: 60px;
 }
 
 .header h1 {
-  font-size: clamp(48px, 10vw, 64px);
-  font-weight: 250;
+  font-size: clamp(52px, 10vw, 68px);
+  font-weight: 200;
   margin: 0 0 0 0;
-  color: #1a1a1a;
-  letter-spacing: -0.04em;
+  color: #0a0a0a;
+  letter-spacing: -0.05em;
+  background: linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .header p {
-  font-size: 18px;
-  margin: -10px 0 0 0;
-  color: #666666;
+  font-size: 17px;
+  margin: -8px 0 0 0;
+  color: #777777;
   font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 .input-section {
@@ -68,8 +73,8 @@ body, #root {
 .attachments {
   display: none;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
 .attachments.active {
@@ -79,11 +84,14 @@ body, #root {
 .attachment-pill {
   display: flex;
   align-items: center;
-  background: #f5f5f5;
-  padding: 8px 12px;
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  padding: 10px 16px;
+  border-radius: 20px;
   font-size: 14px;
-  color: #666666;
+  color: #555555;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .attachment-pill span {
@@ -97,10 +105,11 @@ body, #root {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0 0 0 8px;
+  padding: 0 0 0 10px;
   color: #999999;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
+  transition: color 150ms ease;
 }
 
 .remove-attachment:hover {
@@ -110,7 +119,7 @@ body, #root {
 .input-container {
   position: relative;
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 32px;
 }
 
 .input-field {
@@ -135,12 +144,13 @@ body, #root {
 }
 
 .input-field::placeholder {
-  color: #999999;
+  color: #aaaaaa;
+  font-weight: 400;
 }
 
 .input-controls {
   position: absolute;
-  right: 8px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -181,11 +191,13 @@ body, #root {
 }
 
 .send-button {
-  background: #0066cc;
+  background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+  border: none;
 }
 
 .send-button:hover:not(:disabled) {
-  background: #0056b3;
+  background: linear-gradient(135deg, #0056b3 0%, #004080 100%);
+  box-shadow: 0 4px 16px rgba(0, 102, 204, 0.25);
 }
 
 .send-button svg {
@@ -193,7 +205,8 @@ body, #root {
 }
 
 .send-button:disabled {
-  background: #e5e5e5;
+  background: rgba(200, 200, 200, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .send-button:disabled svg {
@@ -228,7 +241,8 @@ body, #root {
 }
 
 .recording {
-  background: #ff4444 !important;
+  background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%) !important;
+  border: none !important;
 }
 
 .recording svg {
@@ -236,96 +250,86 @@ body, #root {
 }
 
 .action-buttons {
-  display: flex;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .action-button {
-  flex: 1;
-  padding: 14px 24px;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  font-size: 16px;
+  padding: 18px 24px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  font-size: 15px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: #2a2a2a;
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: all 250ms ease;
   text-align: center;
+  box-shadow: 
+    0 4px 20px -2px rgba(0, 0, 0, 0.08),
+    0 2px 8px -2px rgba(0, 0, 0, 0.04);
+  letter-spacing: 0.01em;
 }
 
 .action-button:hover {
-  background: #f8f9fa;
-  border-color: #d1d5db;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 102, 204, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 30px -4px rgba(0, 102, 204, 0.15),
+    0 4px 16px -2px rgba(0, 0, 0, 0.08);
 }
 
 .action-button:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.create-job-button {
-  width: 100%;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
-  border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #ffffff;
-  cursor: pointer;
-  transition: all 200ms ease;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.2);
-  margin-bottom: 16px;
-}
-
-.create-job-button:hover {
-  background: linear-gradient(135deg, #0056b3 0%, #003d7a 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 102, 204, 0.3);
-}
-
-.create-job-button:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.2);
+  box-shadow: 
+    0 4px 20px -2px rgba(0, 102, 204, 0.12),
+    0 2px 8px -2px rgba(0, 0, 0, 0.06);
 }
 
 .secondary-buttons {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
   width: 100%;
 }
 
 .secondary-button {
-  flex: 1;
-  padding: 12px 16px;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
-  font-size: 14px;
+  padding: 18px 24px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  font-size: 15px;
   font-weight: 500;
-  color: #666666;
+  color: #2a2a2a;
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: all 250ms ease;
   text-align: center;
+  box-shadow: 
+    0 4px 20px -2px rgba(0, 0, 0, 0.08),
+    0 2px 8px -2px rgba(0, 0, 0, 0.04);
+  letter-spacing: 0.01em;
 }
 
 .secondary-button:hover {
-  background: #f8f9fa;
-  border-color: #d1d5db;
-  color: #1a1a1a;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 102, 204, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 30px -4px rgba(0, 102, 204, 0.15),
+    0 4px 16px -2px rgba(0, 0, 0, 0.08);
 }
 
 .secondary-button:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+  box-shadow: 
+    0 4px 20px -2px rgba(0, 102, 204, 0.12),
+    0 2px 8px -2px rgba(0, 0, 0, 0.06);
 }
 
 @media (max-width: 768px) {
@@ -333,28 +337,32 @@ body, #root {
     padding: 30px 24px 24px;
   }
   
+  .content-wrapper {
+    max-width: 100%;
+  }
+  
   .action-buttons {
-    flex-direction: column;
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 14px;
   }
   
   .secondary-buttons {
-    flex-direction: column;
-    gap: 10px;
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   
   .header h1 {
-    font-size: clamp(36px, 10vw, 48px);
+    font-size: clamp(40px, 10vw, 52px);
   }
   
   .header {
-    margin-bottom: 24px;
+    margin-bottom: 40px;
   }
 }
 
 @media (max-width: 480px) {
   .container {
-    padding: 20px 16px 16px;
+    padding: 24px 20px 20px;
   }
   
   .input-field {
@@ -374,12 +382,13 @@ body, #root {
     height: 18px;
   }
   
-  .secondary-buttons {
-    gap: 8px;
+  .action-button {
+    padding: 16px 20px;
+    font-size: 14px;
   }
   
   .secondary-button {
-    padding: 10px 12px;
+    padding: 14px 16px;
     font-size: 13px;
   }
 }
@@ -395,7 +404,7 @@ body, #root {
     <div class="content-wrapper">
       <div class="header">
         <h1>frende</h1>
-        <p>private on-device ai companion</p>
+        <p>private on-device ai language companion</p>
       </div>
       
       <div class="input-section">
@@ -434,15 +443,12 @@ body, #root {
         
         <div class="action-buttons">
           <button class="action-button" id="interpreter-btn">Interpreter</button>
-          <button class="action-button" id="foldermode-btn">Folder Cruncher</button>
+          <button class="action-button" id="translator-btn">Translator</button>
         </div>
         
-        <button class="create-job-button" id="create-job-btn">Create AI Job</button>
-        
         <div class="secondary-buttons">
-          <button class="secondary-button" id="translator-btn">Translator</button>
-          <button class="secondary-button" id="teacher-btn">Lang. Teacher</button>
-          <button class="secondary-button" id="quickie-btn">Quickie</button>
+          <button class="secondary-button" id="teacher-btn">Teacher</button>
+          <button class="secondary-button" id="corrector-btn">Corrector</button>
         </div>
       </div>
     </div>
@@ -471,14 +477,6 @@ class LandingPage {
       this.goToChat('interpreter');
     });
     
-    document.getElementById('foldermode-btn').addEventListener('click', () => {
-      this.goToChat('folder');
-    });
-    
-    document.getElementById('create-job-btn').addEventListener('click', () => {
-      this.goToChat('job');
-    });
-    
     document.getElementById('translator-btn').addEventListener('click', () => {
       this.goToChat('translator');
     });
@@ -487,8 +485,8 @@ class LandingPage {
       this.goToChat('teacher');
     });
     
-    document.getElementById('quickie-btn').addEventListener('click', () => {
-      this.goToChat('quickie');
+    document.getElementById('corrector-btn').addEventListener('click', () => {
+      this.goToChat('corrector');
     });
 
     // Input handling

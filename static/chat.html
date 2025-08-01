@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>frende - Chat</title>
+    <script src="./js/markdown-it.min.js"></script> 
     <style>
         * {
             margin: 0;
@@ -27,7 +28,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            max-width: 600px;
+            max-width: 1000px; /* Increased from 600px to 1000px */
             margin: 0 auto;
             background: #ffffff;
         }
@@ -106,7 +107,7 @@
             display: flex;
             gap: 12px;
             align-items: flex-start;
-            max-width: 85%;
+            max-width: 90%; /* Increased from 85% to 90% */
             position: relative;
         }
 
@@ -119,43 +120,104 @@
             align-self: flex-start;
         }
 
-        .message-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-
-        .message.user .message-avatar {
-            background: #0066cc;
-            color: #ffffff;
-        }
-
-        .message.assistant .message-avatar {
-            background: #f5f5f5;
-            color: #666666;
-        }
-
         .message-content {
             background: #f5f5f5;
-            padding: 14px 18px;
+            padding: 16px 20px; /* Increased padding for better spacing */
             border-radius: 18px;
-            line-height: 1.4;
+            line-height: 1.5; /* Improved line height */
             word-wrap: break-word;
             color: #1a1a1a;
             font-size: 16px;
             white-space: pre-wrap;
             position: relative;
+            min-width: 200px; /* Added minimum width */
         }
 
         .message.user .message-content {
             background: #0066cc;
             color: #ffffff;
+        }
+
+        /* Markdown styling for assistant messages */
+        .message.assistant .message-content {
+            white-space: normal; /* Allow normal text wrapping for markdown */
+        }
+
+        .message-content h1, .message-content h2, .message-content h3,
+        .message-content h4, .message-content h5, .message-content h6 {
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+        }
+
+        .message-content h1 { font-size: 1.5em; }
+        .message-content h2 { font-size: 1.3em; }
+        .message-content h3 { font-size: 1.1em; }
+
+        .message-content p {
+            margin: 8px 0;
+        }
+
+        .message-content ul, .message-content ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .message-content li {
+            margin: 4px 0;
+        }
+
+        .message-content code {
+            background: rgba(0, 0, 0, 0.08);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content pre {
+            background: rgba(0, 0, 0, 0.08);
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .message-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .message-content blockquote {
+            border-left: 4px solid #0066cc;
+            padding-left: 16px;
+            margin: 12px 0;
+            color: #666666;
+            font-style: italic;
+        }
+
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12px 0;
+        }
+
+        .message-content th, .message-content td {
+            border: 1px solid #e5e5e5;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message-content th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .message-content strong {
+            font-weight: 600;
+        }
+
+        .message-content em {
+            font-style: italic;
         }
 
         .message-actions {
@@ -508,7 +570,15 @@
         }
 
         /* Mobile Responsive */
-        @media (max-width: 480px) {
+        @media (max-width: 768px) {
+            .chat-container {
+                max-width: 100%;
+            }
+            
+            .message {
+                max-width: 95%;
+            }
+            
             .input-field {
                 padding: 14px 100px 14px 48px;
                 min-height: 48px;
@@ -540,12 +610,10 @@
                 </button>
                 <div class="status-indicator">
                     <div class="status-dot" id="status-dot"></div>
-                    <span id="status-text">Connecting...</span>
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span id="mode-indicator" class="mode-indicator" style="display: none;"></span>
-                <span id="model-info">frende</span>
             </div>
         </div>
 
@@ -602,7 +670,6 @@
                 this.micBtn = document.getElementById('mic-btn');
                 this.fileInput = document.getElementById('file-input');
                 this.statusDot = document.getElementById('status-dot');
-                this.statusText = document.getElementById('status-text');
                 this.backBtn = document.getElementById('back-btn');
                 this.modeIndicator = document.getElementById('mode-indicator');
                 
@@ -614,6 +681,14 @@
                 this.currentMode = 'general';
                 this.ttsAvailable = false;
                 this.currentAudio = null;
+                
+                // Initialize markdown-it
+                this.md = markdownit({
+                    html: true,
+                    linkify: true,
+                    typographer: true,
+                    breaks: true
+                });
                 
                 this.initializeEventListeners();
                 this.checkServerStatus();
@@ -758,18 +833,17 @@
                     if (response.ok) {
                         const data = await response.json();
                         this.ttsAvailable = data.tts_available;
-                        this.updateStatus(true, data.models_loaded ? 'Ready' : 'Loading models...');
+                        this.updateStatus(true);
                     } else {
-                        this.updateStatus(false, 'Server error');
+                        this.updateStatus(false);
                     }
                 } catch (error) {
-                    this.updateStatus(false, 'Disconnected');
+                    this.updateStatus(false);
                 }
             }
 
-            updateStatus(connected, text) {
+            updateStatus(connected) {
                 this.statusDot.classList.toggle('connected', connected);
-                this.statusText.textContent = text;
             }
 
             handleFileSelect(e) {
@@ -874,12 +948,16 @@
                     finalMessage = (modePrompts[this.currentMode] || '') + message;
                 }
 
+                // Store attachments for the message before clearing
+                const messageAttachments = new Map(this.attachedFiles);
+
                 // Add user message to chat
-                this.addMessage('user', message, this.attachedFiles);
+                this.addMessage('user', message, messageAttachments);
                 
-                // Clear input
+                // Clear input and attachments immediately
                 this.messageInput.value = '';
                 this.autoResizeTextarea();
+                this.clearAttachments();
                 
                 // Show loading
                 const loadingId = this.addLoadingMessage();
@@ -889,8 +967,8 @@
                     formData.append('text', finalMessage);
                     formData.append('max_tokens', '32768');
                     
-                    // Add attached files
-                    this.attachedFiles.forEach((file, name) => {
+                    // Add attached files from the stored copy
+                    messageAttachments.forEach((file, name) => {
                         if (file.type.startsWith('image/')) {
                             formData.append('image', file);
                         } else if (file.type.startsWith('audio/')) {
@@ -918,7 +996,6 @@
                     this.addMessage('assistant', `Error: ${error.message}`, null, true);
                 } finally {
                     this.isGenerating = false;
-                    this.clearAttachments();
                     this.updateSendButton();
                 }
             }
@@ -929,7 +1006,18 @@
                     return;
                 }
 
-                // Stop current audio if playing
+                // If this button is currently playing, stop the audio
+                if (button.classList.contains('playing')) {
+                    if (this.currentAudio) {
+                        this.currentAudio.pause();
+                        this.currentAudio = null;
+                        button.classList.remove('playing');
+                        button.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                    }
+                    return;
+                }
+
+                // Stop any other currently playing audio
                 if (this.currentAudio) {
                     this.currentAudio.pause();
                     this.currentAudio = null;
@@ -1003,10 +1091,6 @@
                 messageDiv.className = `message ${role}`;
                 messageDiv.id = messageId;
 
-                const avatar = document.createElement('div');
-                avatar.className = 'message-avatar';
-                avatar.textContent = role === 'user' ? 'U' : 'AI';
-
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
                 
@@ -1019,7 +1103,7 @@
                     const attachmentsDiv = document.createElement('div');
                     attachmentsDiv.className = 'message-attachments';
                     
-                                        for (let [name, file] of attachments) {
+                    for (let [name, file] of attachments) {
                         const attachment = document.createElement('div');
                         attachment.className = 'attachment';
                         
@@ -1039,7 +1123,14 @@
 
                 // Add text content
                 const textDiv = document.createElement('div');
-                textDiv.textContent = content;
+                
+                // Render markdown for assistant messages, plain text for user messages
+                if (role === 'assistant' && !isError) {
+                    textDiv.innerHTML = this.md.render(content);
+                } else {
+                    textDiv.textContent = content;
+                }
+                
                 contentDiv.appendChild(textDiv);
 
                 // Create message container
@@ -1076,7 +1167,6 @@
                     messageContainer.appendChild(actionsDiv);
                 }
 
-                messageDiv.appendChild(avatar);
                 messageDiv.appendChild(messageContainer);
 
                 // Remove welcome message if it exists
@@ -1097,10 +1187,6 @@
                 messageDiv.className = 'message assistant';
                 messageDiv.id = messageId;
 
-                const avatar = document.createElement('div');
-                avatar.className = 'message-avatar';
-                avatar.textContent = 'AI';
-
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
                 
@@ -1116,7 +1202,6 @@
                 `;
                 
                 contentDiv.appendChild(loadingDiv);
-                messageDiv.appendChild(avatar);
                 messageDiv.appendChild(contentDiv);
 
                 this.chatHistory.appendChild(messageDiv);
