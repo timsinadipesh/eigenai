@@ -107,6 +107,7 @@
             gap: 12px;
             align-items: flex-start;
             max-width: 85%;
+            position: relative;
         }
 
         .message.user {
@@ -149,11 +150,78 @@
             color: #1a1a1a;
             font-size: 16px;
             white-space: pre-wrap;
+            position: relative;
         }
 
         .message.user .message-content {
             background: #0066cc;
             color: #ffffff;
+        }
+
+        .message-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 8px;
+            opacity: 0;
+            transition: opacity 200ms ease;
+        }
+
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message.user .message-actions {
+            justify-content: flex-end;
+        }
+
+        .message.assistant .message-actions {
+            justify-content: flex-start;
+        }
+
+        .action-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 200ms ease;
+            font-size: 14px;
+        }
+
+        .action-button:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .action-button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .action-button:disabled:hover {
+            background: none;
+        }
+
+        .action-button svg {
+            width: 16px;
+            height: 16px;
+            fill: #666666;
+        }
+
+        .action-button.playing svg {
+            fill: #0066cc;
+        }
+
+        .action-button.loading {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         .message-attachments {
@@ -544,6 +612,8 @@
                 this.mediaRecorder = null;
                 this.audioChunks = [];
                 this.currentMode = 'general';
+                this.ttsAvailable = false;
+                this.currentAudio = null;
                 
                 this.initializeEventListeners();
                 this.checkServerStatus();
@@ -687,6 +757,7 @@
                     const response = await fetch('/health');
                     if (response.ok) {
                         const data = await response.json();
+                        this.ttsAvailable = data.tts_available;
                         this.updateStatus(true, data.models_loaded ? 'Ready' : 'Loading models...');
                     } else {
                         this.updateStatus(false, 'Server error');
@@ -852,6 +923,80 @@
                 }
             }
 
+            async handleTTS(text, button) {
+                if (!this.ttsAvailable) {
+                    alert('Text-to-speech is not available');
+                    return;
+                }
+
+                // Stop current audio if playing
+                if (this.currentAudio) {
+                    this.currentAudio.pause();
+                    this.currentAudio = null;
+                    // Reset all play buttons
+                    document.querySelectorAll('.action-button.playing').forEach(btn => {
+                        btn.classList.remove('playing');
+                        btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                    });
+                }
+
+                // Show loading state
+                button.classList.add('loading');
+                button.disabled = true;
+
+                try {
+                    const formData = new FormData();
+                    formData.append('text', text);
+
+                    const response = await fetch('/api/tts', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`TTS failed: ${response.status}`);
+                    }
+
+                    // Create audio from response
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+
+                    // Update button to playing state
+                    button.classList.remove('loading');
+                    button.classList.add('playing');
+                    button.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+                    
+                    this.currentAudio = audio;
+
+                    // Handle audio events
+                    audio.onended = () => {
+                        button.classList.remove('playing');
+                        button.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                        URL.revokeObjectURL(audioUrl);
+                        this.currentAudio = null;
+                    };
+
+                    audio.onerror = () => {
+                        button.classList.remove('playing');
+                        button.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                        URL.revokeObjectURL(audioUrl);
+                        this.currentAudio = null;
+                        alert('Failed to play audio');
+                    };
+
+                    // Play the audio
+                    await audio.play();
+
+                } catch (error) {
+                    console.error('TTS error:', error);
+                    alert('Failed to generate speech');
+                    button.classList.remove('loading');
+                } finally {
+                    button.disabled = false;
+                }
+            }
+
             addMessage(role, content, attachments = null, isError = false) {
                 const messageId = 'msg-' + Date.now();
                 const messageDiv = document.createElement('div');
@@ -874,34 +1019,75 @@
                     const attachmentsDiv = document.createElement('div');
                     attachmentsDiv.className = 'message-attachments';
                     
-                    for (const [name, file] of attachments) {
+                                        for (let [name, file] of attachments) {
                         const attachment = document.createElement('div');
                         attachment.className = 'attachment';
-                        const icon = file.type.startsWith('image/') ? '📷' : 
-                                   file.type.startsWith('audio/') ? '🎵' : '📎';
-                        attachment.innerHTML = `${icon} ${name}`;
+                        
+                        if (file.type && file.type.startsWith('image/')) {
+                            attachment.innerHTML = '🖼️ ' + name;
+                        } else if (file.type && file.type.startsWith('audio/')) {
+                            attachment.innerHTML = '🎵 ' + name;
+                        } else {
+                            attachment.innerHTML = '📎 ' + name;
+                        }
+                        
                         attachmentsDiv.appendChild(attachment);
                     }
                     
                     contentDiv.appendChild(attachmentsDiv);
                 }
 
+                // Add text content
                 const textDiv = document.createElement('div');
                 textDiv.textContent = content;
                 contentDiv.appendChild(textDiv);
 
+                // Create message container
+                const messageContainer = document.createElement('div');
+                messageContainer.appendChild(contentDiv);
+
+                // Add action buttons for assistant messages
+                if (role === 'assistant' && !isError) {
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'message-actions';
+
+                    // Copy button
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'action-button';
+                    copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+                    copyBtn.onclick = () => {
+                        navigator.clipboard.writeText(content);
+                        copyBtn.innerHTML = '✓';
+                        setTimeout(() => {
+                            copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+                        }, 2000);
+                    };
+
+                    // TTS button (only if available)
+                    if (this.ttsAvailable) {
+                        const ttsBtn = document.createElement('button');
+                        ttsBtn.className = 'action-button';
+                        ttsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                        ttsBtn.onclick = () => this.handleTTS(content, ttsBtn);
+                        actionsDiv.appendChild(ttsBtn);
+                    }
+
+                    actionsDiv.appendChild(copyBtn);
+                    messageContainer.appendChild(actionsDiv);
+                }
+
                 messageDiv.appendChild(avatar);
-                messageDiv.appendChild(contentDiv);
+                messageDiv.appendChild(messageContainer);
 
                 // Remove welcome message if it exists
-                const welcome = this.chatHistory.querySelector('.welcome-message');
-                if (welcome) {
-                    welcome.remove();
+                const welcomeMsg = this.chatHistory.querySelector('.welcome-message');
+                if (welcomeMsg) {
+                    welcomeMsg.remove();
                 }
 
                 this.chatHistory.appendChild(messageDiv);
                 this.scrollToBottom();
-                
+
                 return messageId;
             }
 
@@ -916,8 +1102,11 @@
                 avatar.textContent = 'AI';
 
                 const contentDiv = document.createElement('div');
-                contentDiv.className = 'message-content loading';
-                contentDiv.innerHTML = `
+                contentDiv.className = 'message-content';
+                
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading';
+                loadingDiv.innerHTML = `
                     <span>Thinking</span>
                     <div class="loading-dots">
                         <div class="loading-dot"></div>
@@ -925,12 +1114,14 @@
                         <div class="loading-dot"></div>
                     </div>
                 `;
-
+                
+                contentDiv.appendChild(loadingDiv);
                 messageDiv.appendChild(avatar);
                 messageDiv.appendChild(contentDiv);
+
                 this.chatHistory.appendChild(messageDiv);
                 this.scrollToBottom();
-                
+
                 return messageId;
             }
 
@@ -949,11 +1140,61 @@
             scrollToBottom() {
                 this.chatHistory.scrollTop = this.chatHistory.scrollHeight;
             }
+
+            // Utility method to format file size
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            // Error handling for network issues
+            showError(message) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = message;
+                
+                this.chatHistory.appendChild(errorDiv);
+                this.scrollToBottom();
+                
+                // Remove error after 5 seconds
+                setTimeout(() => {
+                    errorDiv.remove();
+                }, 5000);
+            }
+
+            // Periodic status check
+            startStatusPolling() {
+                setInterval(() => {
+                    if (!this.isGenerating) {
+                        this.checkServerStatus();
+                    }
+                }, 30000); // Check every 30 seconds
+            }
         }
 
-        // Initialize the chat app
+        // Initialize the app when DOM is loaded
         document.addEventListener('DOMContentLoaded', () => {
-            new ChatApp();
+            const app = new ChatApp();
+            app.startStatusPolling();
+            
+            // Handle page visibility for better performance
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && app.currentAudio) {
+                    // Pause audio when page is hidden
+                    app.currentAudio.pause();
+                }
+            });
+            
+            // Handle beforeunload to warn about unsaved content
+            window.addEventListener('beforeunload', (e) => {
+                if (app.messageInput.value.trim() || app.attachedFiles.size > 0) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
         });
     </script>
 </body>

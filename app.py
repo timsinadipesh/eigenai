@@ -8,13 +8,15 @@ import gc
 import json
 import logging
 import tempfile
+import subprocess
+import hashlib
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import numpy as np
 import onnxruntime as ort
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from transformers import AutoProcessor, AutoConfig
 import uvicorn
 from PIL import Image
@@ -23,6 +25,142 @@ from contextlib import asynccontextmanager
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+class PiperTTSEngine:
+    """Piper TTS integration for text-to-speech"""
+    
+    def __init__(self):
+        # Find the voices directory relative to this file
+        self.voices_dir = Path(__file__).parent / "voices"
+        self.cache_dir = Path.home() / ".cache" / "piper_audio"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Dynamically find all .onnx voice models in the voices directory
+        self.voices = {}
+        if self.voices_dir.exists():
+            for onnx_file in self.voices_dir.glob("*.onnx"):
+                # Example: en_US-lessac-high.onnx → "en_US" and "en"
+                lang_full = onnx_file.name.split("-")[0]  # "en_US"
+                lang_short = lang_full.split("_")[0]      # "en"
+                self.voices[lang_full] = onnx_file
+                self.voices[lang_short] = onnx_file
+
+        # Check if piper is available
+        self.piper_available = self._check_piper_installation()
+        
+    def _check_piper_installation(self) -> bool:
+        """Check if piper is installed and available"""
+        try:
+            result = subprocess.run(["piper", "--help"], 
+                                  capture_output=True, text=True, timeout=5)
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            logger.warning("Piper TTS not found. TTS functionality disabled.")
+            return False
+    
+    def _detect_language(self, text: str) -> str:
+        """Simple language detection based on common words/patterns"""
+        text_lower = text.lower()
+        
+        # French indicators
+        french_words = ['le', 'la', 'les', 'de', 'du', 'des', 'un', 'une', 'et', 'est', 'avec', 'pour', 'dans', 'sur']
+        if any(word in text_lower.split() for word in french_words):
+            if self.voices["fr"].exists():
+                return "fr"
+        
+        # German indicators  
+        german_words = ['der', 'die', 'das', 'und', 'ist', 'mit', 'für', 'in', 'auf', 'von', 'zu', 'den', 'dem']
+        if any(word in text_lower.split() for word in german_words):
+            if self.voices["de"].exists():
+                return "de"
+        
+        # Default to English
+        return "en"
+    
+    def _get_cache_path(self, text: str, language: str) -> Path:
+        """Generate cache file path based on text hash"""
+        text_hash = hashlib.md5(text.encode()).hexdigest()
+        return self.cache_dir / f"{text_hash}_{language}.wav"
+    
+    async def synthesize(self, text: str, language: str = None) -> Optional[Path]:
+        """Synthesize text to speech using Piper"""
+        
+        if not self.piper_available:
+            return None
+        
+        # Auto-detect language if not specified
+        if language is None:
+            language = self._detect_language(text)
+        
+        # Check if voice model exists
+        if language not in self.voices or not self.voices[language].exists():
+            logger.warning(f"Voice model for {language} not found, falling back to English")
+            language = "en"
+            if not self.voices[language].exists():
+                logger.error("No voice models available")
+                return None
+        
+        # Check cache first
+        cache_path = self._get_cache_path(text, language)
+        if cache_path.exists():
+            logger.info(f"Using cached audio: {cache_path}")
+            return cache_path
+        
+        try:
+            # Clean text for TTS (remove markdown, etc.)
+            clean_text = self._clean_text_for_tts(text)
+            
+            # Run Piper TTS
+            cmd = [
+                "piper",
+                "--model", str(self.voices[language]),
+                "--output_file", str(cache_path)
+            ]
+            
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            stdout, stderr = process.communicate(input=clean_text, timeout=30)
+            
+            if process.returncode == 0 and cache_path.exists():
+                logger.info(f"TTS synthesis complete: {cache_path}")
+                return cache_path
+            else:
+                logger.error(f"Piper TTS failed: {stderr}")
+                return None
+                
+        except subprocess.TimeoutExpired:
+            process.kill()
+            logger.error("Piper TTS timed out")
+            return None
+        except Exception as e:
+            logger.error(f"TTS synthesis error: {e}")
+            return None
+    
+    def _clean_text_for_tts(self, text: str) -> str:
+        """Clean text for better TTS synthesis"""
+        import re
+        
+        # Remove markdown formatting
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Bold
+        text = re.sub(r'\*(.*?)\*', r'\1', text)      # Italic
+        text = re.sub(r'`(.*?)`', r'\1', text)        # Code
+        text = re.sub(r'#{1,6}\s', '', text)          # Headers
+        
+        # Clean up extra whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Limit length (Piper works better with shorter texts)
+        if len(text) > 1000:
+            text = text[:1000] + "..."
+        
+        return text
 
 
 class LocalONNXGemmaEngine:
@@ -92,12 +230,12 @@ class LocalONNXGemmaEngine:
         
         for file in onnx_files:
             file_path = onnx_dir / file
-            if not file_path.exists():
-                logger.error(f"Missing ONNX model: {file}")
-                return False
-            else:
+            if file_path.exists():
                 size_mb = os.path.getsize(file_path) / (1024 * 1024)
                 logger.info(f"✓ Found {file} ({size_mb:.1f} MB)")
+            else:
+                logger.error(f"Missing ONNX model: {file}")
+                return False
         
         return True
     
@@ -365,8 +503,9 @@ class LocalONNXGemmaEngine:
             raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
 
 
-# Initialize the inference engine
+# Initialize the inference engine and TTS
 inference_engine = LocalONNXGemmaEngine()
+tts_engine = PiperTTSEngine()
 
 
 @asynccontextmanager
@@ -399,6 +538,7 @@ async def health_check():
     return {
         "status": "healthy" if inference_engine.is_loaded else "loading",
         "models_loaded": inference_engine.is_loaded,
+        "tts_available": tts_engine.piper_available,
         "cache_location": str(inference_engine.cache_dir),
         "quantization": {
             "embed_tokens": "quantized",
@@ -409,7 +549,7 @@ async def health_check():
     }
 
 
-app.get("/chat")
+@app.get("/chat")
 async def chat_interface():
     """Serve the chat interface"""
     return FileResponse("static/chat.html")
@@ -483,6 +623,43 @@ async def generate_response(
                 pass
 
 
+@app.post("/api/tts")
+async def text_to_speech(
+    text: str = Form(...),
+    language: str = Form(None)
+):
+    """Convert text to speech using Piper TTS"""
+    
+    if not tts_engine.piper_available:
+        raise HTTPException(status_code=503, detail="TTS service not available")
+    
+    try:
+        # Synthesize audio
+        audio_path = await tts_engine.synthesize(text, language)
+        
+        if not audio_path or not audio_path.exists():
+            raise HTTPException(status_code=500, detail="TTS synthesis failed")
+        
+        # Stream the audio file
+        def audio_stream():
+            with open(audio_path, 'rb') as audio_file:
+                while chunk := audio_file.read(8192):
+                    yield chunk
+        
+        return StreamingResponse(
+            audio_stream(),
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": "inline; filename=tts_audio.wav",
+                "Accept-Ranges": "bytes"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"TTS error: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS failed: {e}")
+
+
 @app.get("/")
 async def root():
     """Serve the main index page"""
@@ -497,11 +674,13 @@ def main():
     print("📁 Cache directory:", inference_engine.cache_dir)
     print("🔧 ONNX Runtime providers:", inference_engine.ort_providers)
     print("📊 Using CPU inference with all available cores")
+    print("🎵 TTS Engine:", "Enabled" if tts_engine.piper_available else "Disabled")
     print("="*70)
     print()
     print("Starting server...")
     print("- Health check: http://localhost:8000/health")
     print("- API endpoint: http://localhost:8000/api/generate")
+    print("- TTS endpoint: http://localhost:8000/api/tts")
     print("- Interactive docs: http://localhost:8000/docs")
     print()
     
