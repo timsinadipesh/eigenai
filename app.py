@@ -1,6 +1,6 @@
 """
-ONNX Gemma 3n E2B Local Inference Application
-Clean implementation that works with locally downloaded ONNX models only
+Enhanced ONNX Gemma 3n E2B with Token Streaming Support
+This implementation adds real-time token streaming using Server-Sent Events (SSE)
 """
 
 import os
@@ -10,8 +10,9 @@ import logging
 import tempfile
 import subprocess
 import hashlib
+import asyncio
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 import numpy as np
 import onnxruntime as ort
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
@@ -21,6 +22,9 @@ from transformers import AutoProcessor, AutoConfig
 import uvicorn
 from PIL import Image
 from contextlib import asynccontextmanager
+
+# For Server-Sent Events (SSE)
+from sse_starlette.sse import EventSourceResponse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -66,13 +70,13 @@ class PiperTTSEngine:
         # French indicators
         french_words = ['le', 'la', 'les', 'de', 'du', 'des', 'un', 'une', 'et', 'est', 'avec', 'pour', 'dans', 'sur']
         if any(word in text_lower.split() for word in french_words):
-            if self.voices["fr"].exists():
+            if "fr" in self.voices and self.voices["fr"].exists():
                 return "fr"
         
         # German indicators  
         german_words = ['der', 'die', 'das', 'und', 'ist', 'mit', 'für', 'in', 'auf', 'von', 'zu', 'den', 'dem']
         if any(word in text_lower.split() for word in german_words):
-            if self.voices["de"].exists():
+            if "de" in self.voices and self.voices["de"].exists():
                 return "de"
         
         # Default to English
@@ -97,7 +101,7 @@ class PiperTTSEngine:
         if language not in self.voices or not self.voices[language].exists():
             logger.warning(f"Voice model for {language} not found, falling back to English")
             language = "en"
-            if not self.voices[language].exists():
+            if language not in self.voices or not self.voices[language].exists():
                 logger.error("No voice models available")
                 return None
         
@@ -164,7 +168,7 @@ class PiperTTSEngine:
 
 
 class LocalONNXGemmaEngine:
-    """Local-only ONNX Gemma 3n E2B inference engine"""
+    """Local-only ONNX Gemma 3n E2B inference engine with streaming support"""
     
     def __init__(self, cache_dir: Optional[str] = None):
         # Local cache directory (where download.py puts files)
@@ -342,7 +346,7 @@ class LocalONNXGemmaEngine:
             logger.info("="*60)
             logger.info("✅ ALL MODELS LOADED SUCCESSFULLY!")
             logger.info("="*60)
-            logger.info("🚀 Ready for inference!")
+            logger.info("🚀 Ready for inference with streaming support!")
             
         except Exception as e:
             logger.error(f"Failed to load models: {e}")
@@ -368,44 +372,37 @@ class LocalONNXGemmaEngine:
         self.is_loaded = False
         gc.collect()
         logger.info("✓ Cleanup complete")
-    
-    async def generate_response(self, messages: List[Dict], max_new_tokens: int = 1000) -> str:
-        """Generate response using local ONNX models"""
-        
+
+ 
+    async def generate_response_stream(
+        self, 
+        messages: List[Dict], 
+        max_new_tokens: int = 1000
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Advanced streaming with incremental text decoding.
+        Yields new text chunks as soon as they are available.
+        """
         if not self.is_loaded:
-            raise HTTPException(status_code=500, detail="Models not loaded")
-        
-        # Limit max tokens to prevent excessive generation
+            yield {'error': 'Models not loaded', 'finished': True}
+            return
+
         max_new_tokens = min(max_new_tokens, 2048)
-        logger.info(f"🎯 Starting generation (max_tokens: {max_new_tokens})")
-        
+        logger.info(f"🎯 Starting advanced streaming generation (max_tokens: {max_new_tokens})")
+
         try:
-            # Process input with chat template
+            # Prepare input
             inputs = self.processor.apply_chat_template(
                 messages,
                 add_generation_prompt=True,
                 tokenize=True,
                 return_dict=True,
-                return_tensors="pt"  # PyTorch tensors required
+                return_tensors="pt"
             )
-            
-            # Convert to numpy for ONNX
             input_ids = inputs["input_ids"].numpy()
             attention_mask = inputs["attention_mask"].numpy()
             position_ids = np.cumsum(attention_mask, axis=-1) - 1
-            
-            # Extract multimodal inputs if present
-            pixel_values = inputs["pixel_values"].numpy() if "pixel_values" in inputs else None
-            input_features = inputs["input_features"].numpy().astype(np.float32) if "input_features" in inputs else None
-            input_features_mask = inputs["input_features_mask"].numpy() if "input_features_mask" in inputs else None
-            
-            logger.info(f"📊 Input shape: {input_ids.shape}")
-            if pixel_values is not None:
-                logger.info(f"🖼️  Image input: {pixel_values.shape}")
-            if input_features is not None:
-                logger.info(f"🎵 Audio input: {input_features.shape}")
-            
-            # Initialize generation state
+
             batch_size = input_ids.shape[0]
             past_key_values = {
                 f"past_key_values.{layer}.{kv}": np.zeros(
@@ -415,45 +412,16 @@ class LocalONNXGemmaEngine:
                 for layer in range(self.num_hidden_layers)
                 for kv in ("key", "value")
             }
-            
-            generated_tokens = np.empty((batch_size, 0), dtype=np.int64)
-            image_features = None
-            audio_features = None
-            
-            # Generation loop
+
+            all_generated_tokens = []
+            decoded_text = ""
+
             for step in range(max_new_tokens):
                 # Get embeddings
                 inputs_embeds, per_layer_inputs = self.embed_session.run(
                     None, {"input_ids": input_ids}
                 )
-                
-                # Process image features (once)
-                if image_features is None and pixel_values is not None:
-                    image_features = self.vision_session.run(
-                        ["image_features"],  
-                        {"pixel_values": pixel_values}
-                    )[0]
-                    
-                    # Replace image tokens with features
-                    mask = (input_ids == self.image_token_id)
-                    if mask.any():
-                        inputs_embeds[mask] = image_features.reshape(-1, image_features.shape[-1])
-                
-                # Process audio features (once)  
-                if audio_features is None and input_features is not None and input_features_mask is not None:
-                    audio_features = self.audio_session.run(
-                        ["audio_features"],
-                        {
-                            "input_features": input_features,
-                            "input_features_mask": input_features_mask
-                        }
-                    )[0]
-                    
-                    # Replace audio tokens with features
-                    mask = (input_ids == self.audio_token_id)
-                    if mask.any():
-                        inputs_embeds[mask] = audio_features.reshape(-1, audio_features.shape[-1])
-                
+
                 # Run decoder
                 outputs = self.decoder_session.run(None, {
                     "inputs_embeds": inputs_embeds,
@@ -461,46 +429,78 @@ class LocalONNXGemmaEngine:
                     "position_ids": position_ids,
                     **past_key_values
                 })
-                
                 logits = outputs[0]
                 present_key_values = outputs[1:]
-                
-                # Sample next token (greedy for now)
+
+                # Greedy sampling
                 next_token = np.argmax(logits[:, -1], axis=-1, keepdims=True)
-                generated_tokens = np.concatenate([generated_tokens, next_token], axis=-1)
-                
-                # Update for next iteration
+                token_id = int(next_token[0])
+                all_generated_tokens.append(token_id)
+
+                # Incremental decoding
+                try:
+                    new_decoded_text = self.processor.tokenizer.decode(
+                        all_generated_tokens, 
+                        skip_special_tokens=True
+                    )
+                    # Only yield the new part
+                    if len(new_decoded_text) > len(decoded_text):
+                        new_part = new_decoded_text[len(decoded_text):]
+                        decoded_text = new_decoded_text
+                        if new_part:
+                            yield {
+                                'token': new_part,
+                                'finished': False,
+                                'total_tokens': len(all_generated_tokens),
+                                'step': step
+                            }
+                except Exception as decode_error:
+                    logger.warning(f"Advanced decode error at step {step}: {decode_error}")
+
+                await asyncio.sleep(0.001)  # Optional: for UI smoothness
+
+                # Prepare for next step
                 input_ids = next_token
                 attention_mask = np.ones_like(input_ids)
                 position_ids = position_ids[:, -1:] + 1
-                
-                # Update key-value cache
                 for i, key in enumerate(past_key_values.keys()):
                     past_key_values[key] = present_key_values[i]
-                
-                # Check for EOS token
-                if (next_token == self.eos_token_id).all():
+
+                # EOS check
+                if token_id == self.eos_token_id:
                     logger.info(f"🏁 EOS reached at step {step}")
                     break
-                
-                # Progress logging
-                if step > 0 and step % 50 == 0:
-                    logger.info(f"⏳ Generated {step} tokens...")
-            
-            # Decode the generated tokens
-            response = self.processor.batch_decode(
-                generated_tokens, 
-                skip_special_tokens=True
-            )[0]
-            
-            logger.info(f"✅ Generation complete ({len(generated_tokens[0])} tokens)")
-            return response.strip()
-            
+
+            # Final signal
+            yield {
+                'token': '',
+                'finished': True,
+                'total_tokens': len(all_generated_tokens),
+                'step': step
+            }
+            logger.info(f"✅ Advanced streaming complete ({len(all_generated_tokens)} tokens)")
+
         except Exception as e:
-            logger.error(f"💥 Generation failed: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
+            logger.error(f"💥 Advanced streaming failed: {e}")
+            yield {
+                'error': f"Generation failed: {e}",
+                'finished': True
+            }
+        
+        async def generate_response(self, messages: List[Dict], max_new_tokens: int = 1000) -> str:
+            """
+            Non-streaming generation for backward compatibility
+            Collects all tokens from the streaming generator
+            """
+            
+            full_response = ""
+            async for chunk in self.generate_response_stream(messages, max_new_tokens):
+                if chunk.get('error'):
+                    raise HTTPException(status_code=500, detail=chunk['error'])
+                if not chunk['finished']:
+                    full_response += chunk['token']
+            
+            return full_response.strip()
 
 
 # Initialize the inference engine and TTS
@@ -522,9 +522,9 @@ async def lifespan(app: FastAPI):
 
 # FastAPI application
 app = FastAPI(
-    title="Local ONNX Gemma 3n E2B",
-    description="Multimodal AI inference using locally cached ONNX models",
-    version="2.0.0",
+    title="Local ONNX Gemma 3n E2B with Streaming",
+    description="Multimodal AI inference with real-time token streaming using locally cached ONNX models",
+    version="2.1.0",
     lifespan=lifespan
 )
 
@@ -539,6 +539,7 @@ async def health_check():
         "status": "healthy" if inference_engine.is_loaded else "loading",
         "models_loaded": inference_engine.is_loaded,
         "tts_available": tts_engine.piper_available,
+        "streaming_supported": True,
         "cache_location": str(inference_engine.cache_dir),
         "quantization": {
             "embed_tokens": "quantized",
@@ -562,7 +563,7 @@ async def generate_response(
     audio: UploadFile = File(None),
     max_tokens: int = Form(1000)
 ):
-    """Generate response from text, image, and/or audio inputs"""
+    """Generate response from text, image, and/or audio inputs (non-streaming)"""
     
     # Limit max tokens
     max_tokens = min(max_tokens, 2048)
@@ -623,6 +624,94 @@ async def generate_response(
                 pass
 
 
+@app.post("/api/generate/stream")
+async def generate_response_stream(
+    text: str = Form(...),
+    image: UploadFile = File(None),
+    audio: UploadFile = File(None),
+    max_tokens: int = Form(1000)
+):
+    """
+    Generate streaming response from text, image, and/or audio inputs
+    Uses Server-Sent Events (SSE) for real-time token streaming
+    """
+    
+    # Limit max tokens
+    max_tokens = min(max_tokens, 2048)
+    
+    content = [{"type": "text", "text": text}]
+    temp_files = []
+    
+    try:
+        # Handle image upload
+        if image and image.filename:
+            if not image.content_type.startswith("image/"):
+                raise HTTPException(status_code=400, detail="Invalid image format")
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                content_bytes = await image.read()
+                tmp_file.write(content_bytes)
+                temp_files.append(tmp_file.name)
+            
+            img = Image.open(temp_files[-1])
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            content.append({"type": "image", "image": img})
+            logger.info(f"🖼️  Image processed: {img.size}")
+        
+        # Handle audio upload
+        if audio and audio.filename:
+            if not audio.content_type.startswith("audio/"):
+                raise HTTPException(status_code=400, detail="Invalid audio format")
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                content_bytes = await audio.read()
+                tmp_file.write(content_bytes)
+                temp_files.append(tmp_file.name)
+            
+            content.append({"type": "audio", "audio": temp_files[-1]})
+            logger.info(f"🎵 Audio processed: {temp_files[-1]}")
+        
+        # Create the generator for streaming
+        messages = [{"role": "user", "content": content}]
+        
+        async def event_generator():
+            """Generator function for Server-Sent Events"""
+            try:
+                async for chunk in inference_engine.generate_response_stream(messages, max_new_tokens=max_tokens):
+                    # Format the chunk as SSE data
+                    yield {
+                        "event": "token" if not chunk['finished'] else "done",
+                        "data": json.dumps(chunk)
+                    }
+                    
+            except Exception as e:
+                logger.error(f"Streaming error: {e}")
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": str(e), "finished": True})
+                }
+            finally:
+                # Clean up temporary files
+                for temp_file in temp_files:
+                    try:
+                        os.unlink(temp_file)
+                    except FileNotFoundError:
+                        pass
+        
+        # Return Server-Sent Events response
+        return EventSourceResponse(event_generator())
+        
+    except Exception as e:
+        # Clean up temporary files if there's an early error
+        for temp_file in temp_files:
+            try:
+                os.unlink(temp_file)
+            except FileNotFoundError:
+                pass
+        raise HTTPException(status_code=500, detail=f"Request processing failed: {e}")
+
+
 @app.post("/api/tts")
 async def text_to_speech(
     text: str = Form(...),
@@ -669,17 +758,19 @@ async def root():
 def main():
     """Run the application"""
     print("="*70)
-    print("🚀 LOCAL ONNX GEMMA 3N E2B MULTIMODAL SERVER")
+    print("🚀 LOCAL ONNX GEMMA 3N E2B MULTIMODAL SERVER WITH STREAMING")
     print("="*70)
     print("📁 Cache directory:", inference_engine.cache_dir)
     print("🔧 ONNX Runtime providers:", inference_engine.ort_providers)
     print("📊 Using CPU inference with all available cores")
     print("🎵 TTS Engine:", "Enabled" if tts_engine.piper_available else "Disabled")
+    print("🌊 Token Streaming: Enabled via Server-Sent Events")
     print("="*70)
     print()
     print("Starting server...")
     print("- Health check: http://localhost:8000/health")
-    print("- API endpoint: http://localhost:8000/api/generate")
+    print("- API endpoint (non-streaming): http://localhost:8000/api/generate")
+    print("- API endpoint (streaming): http://localhost:8000/api/generate/stream")
     print("- TTS endpoint: http://localhost:8000/api/tts")
     print("- Interactive docs: http://localhost:8000/docs")
     print()

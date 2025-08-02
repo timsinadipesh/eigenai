@@ -93,6 +93,30 @@
             fill: currentColor;
         }
 
+        /* NEW: Streaming indicator */
+        .streaming-indicator {
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .streaming-indicator.active {
+            display: flex;
+            animation: streamPulse 1.5s infinite;
+        }
+
+        @keyframes streamPulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
         .chat-history {
             flex: 1;
             overflow-y: auto;
@@ -218,6 +242,21 @@
 
         .message-content em {
             font-style: italic;
+        }
+
+        /* NEW: Streaming cursor */
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background: #0066cc;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
         }
 
         .message-actions {
@@ -551,6 +590,28 @@
             font-size: 14px;
         }
 
+        /* NEW: Streaming toggle control */
+        .streaming-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #666666;
+        }
+
+        .streaming-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .streaming-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #0066cc;
+        }
+
         /* Scrollbar styling */
         .chat-history::-webkit-scrollbar {
             width: 6px;
@@ -613,6 +674,10 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
+                <!-- NEW: Streaming indicator -->
+                <div class="streaming-indicator" id="streaming-indicator">
+                    🌊 Streaming...
+                </div>
                 <span id="mode-indicator" class="mode-indicator" style="display: none;"></span>
             </div>
         </div>
@@ -626,6 +691,14 @@
 
         <div class="input-section">
             <div class="attachments" id="attachment-display"></div>
+            
+            <!-- NEW: Streaming controls -->
+            <div class="streaming-controls">
+                <div class="streaming-toggle">
+                    <input type="checkbox" id="streaming-checkbox" class="streaming-checkbox" checked>
+                    <label for="streaming-checkbox">Enable token streaming</label>
+                </div>
+            </div>
             
             <div class="input-container">
                 <button class="attachment-button" id="attachment-btn">
@@ -673,6 +746,10 @@
                 this.backBtn = document.getElementById('back-btn');
                 this.modeIndicator = document.getElementById('mode-indicator');
                 
+                // NEW: Streaming elements
+                this.streamingCheckbox = document.getElementById('streaming-checkbox');
+                this.streamingIndicator = document.getElementById('streaming-indicator');
+                
                 this.attachedFiles = new Map();
                 this.isGenerating = false;
                 this.isRecording = false;
@@ -681,6 +758,10 @@
                 this.currentMode = 'general';
                 this.ttsAvailable = false;
                 this.currentAudio = null;
+                
+                // NEW: Streaming state
+                this.isStreaming = false;
+                this.currentStreamingMessage = null;
                 
                 // Initialize markdown-it
                 this.md = markdownit({
@@ -816,12 +897,19 @@
                 const hasText = this.messageInput.value.trim().length > 0;
                 const hasFiles = this.attachedFiles.size > 0;
                 this.sendBtn.disabled = !hasText && !hasFiles;
+                
+                // NEW: Update button text based on streaming/generating state
+                if (this.isGenerating) {
+                    this.sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>'; // Stop icon
+                } else {
+                    this.sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'; // Send icon
+                }
             }
 
             handleKeyDown(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if (!this.sendBtn.disabled) {
+                    if (!this.sendBtn.disabled || this.isGenerating) {
                         this.handleSubmit();
                     }
                 }
@@ -925,13 +1013,17 @@
             }
 
             async handleSubmit() {
-                if (this.isGenerating) return;
+                // NEW: Handle stop generation if currently generating
+                if (this.isGenerating) {
+                    this.stopGeneration();
+                    return;
+                }
                 
                 const message = this.messageInput.value.trim();
                 if (!message && this.attachedFiles.size === 0) return;
 
                 this.isGenerating = true;
-                this.sendBtn.disabled = true;
+                this.updateSendButton();
 
                 // Prepare message based on mode
                 let finalMessage = message;
@@ -959,9 +1051,6 @@
                 this.autoResizeTextarea();
                 this.clearAttachments();
                 
-                // Show loading
-                const loadingId = this.addLoadingMessage();
-
                 try {
                     const formData = new FormData();
                     formData.append('text', finalMessage);
@@ -976,6 +1065,116 @@
                         }
                     });
 
+                    // NEW: Choose streaming or non-streaming based on checkbox
+                    if (this.streamingCheckbox.checked) {
+                        await this.handleStreamingGeneration(formData);
+                    } else {
+                        await this.handleNonStreamingGeneration(formData);
+                    }
+
+                } catch (error) {
+                    this.addMessage('assistant', `Error: ${error.message}`, null, true);
+                } finally {
+                    this.isGenerating = false;
+                    this.isStreaming = false;
+                    this.streamingIndicator.classList.remove('active');
+                    this.updateSendButton();
+                }
+            }
+
+            // NEW: Streaming generation method
+            async handleStreamingGeneration(formData) {
+                this.isStreaming = true;
+                this.streamingIndicator.classList.add('active');
+                
+                // Create assistant message bubble for streaming
+                const assistantMessageId = this.addMessage('assistant', '');
+                this.currentStreamingMessage = document.getElementById(assistantMessageId);
+                const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                
+                // Add cursor for streaming effect
+                const cursor = document.createElement('span');
+                cursor.className = 'streaming-cursor';
+                messageContent.appendChild(cursor);
+
+                try {
+                    const response = await fetch('/api/generate/stream', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let fullResponse = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        
+                        // Process complete SSE messages
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.substring(6));
+                                    
+                                    if (data.error) {
+                                        throw new Error(data.error);
+                                    }
+                                    
+                                    if (!data.finished && data.token) {
+                                        // Add token to full response
+                                        fullResponse += data.token;
+                                        
+                                        // Update the message content with markdown rendering
+                                        const textDiv = document.createElement('div');
+                                        textDiv.innerHTML = this.md.render(fullResponse);
+                                        
+                                        // Replace content (keeping cursor)
+                                        messageContent.innerHTML = '';
+                                        messageContent.appendChild(textDiv);
+                                        messageContent.appendChild(cursor);
+                                        
+                                        this.scrollToBottom();
+                                    }
+                                    
+                                    if (data.finished) {
+                                        // Remove cursor and finalize message
+                                        cursor.remove();
+                                        
+                                        // Add action buttons
+                                        this.addMessageActions(this.currentStreamingMessage, fullResponse);
+                                        return;
+                                    }
+                                } catch (parseError) {
+                                    console.error('Failed to parse SSE data:', parseError);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    cursor.remove();
+                    messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
+                    throw error;
+                }
+            }
+
+            // NEW: Non-streaming generation method (original)
+            async handleNonStreamingGeneration(formData) {
+                // Show loading
+                const loadingId = this.addLoadingMessage();
+
+                try {
                     const response = await fetch('/api/generate', {
                         method: 'POST',
                         body: formData
@@ -993,10 +1192,22 @@
 
                 } catch (error) {
                     this.removeMessage(loadingId);
-                    this.addMessage('assistant', `Error: ${error.message}`, null, true);
-                } finally {
-                    this.isGenerating = false;
-                    this.updateSendButton();
+                    throw error;
+                }
+            }
+
+            // NEW: Stop generation method
+            stopGeneration() {
+                this.isGenerating = false;
+                this.isStreaming = false;
+                this.streamingIndicator.classList.remove('active');
+                this.updateSendButton();
+                
+                // Remove streaming cursor if present
+                if (this.currentStreamingMessage) {
+                    const cursor = this.currentStreamingMessage.querySelector('.streaming-cursor');
+                    if (cursor) cursor.remove();
+                    this.currentStreamingMessage = null;
                 }
             }
 
@@ -1125,9 +1336,9 @@
                 const textDiv = document.createElement('div');
                 
                 // Render markdown for assistant messages, plain text for user messages
-                if (role === 'assistant' && !isError) {
+                if (role === 'assistant' && !isError && content) {
                     textDiv.innerHTML = this.md.render(content);
-                } else {
+                } else if (content) {
                     textDiv.textContent = content;
                 }
                 
@@ -1136,36 +1347,6 @@
                 // Create message container
                 const messageContainer = document.createElement('div');
                 messageContainer.appendChild(contentDiv);
-
-                // Add action buttons for assistant messages
-                if (role === 'assistant' && !isError) {
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'message-actions';
-
-                    // Copy button
-                    const copyBtn = document.createElement('button');
-                    copyBtn.className = 'action-button';
-                    copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
-                    copyBtn.onclick = () => {
-                        navigator.clipboard.writeText(content);
-                        copyBtn.innerHTML = '✓';
-                        setTimeout(() => {
-                            copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
-                        }, 2000);
-                    };
-
-                    // TTS button (only if available)
-                    if (this.ttsAvailable) {
-                        const ttsBtn = document.createElement('button');
-                        ttsBtn.className = 'action-button';
-                        ttsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-                        ttsBtn.onclick = () => this.handleTTS(content, ttsBtn);
-                        actionsDiv.appendChild(ttsBtn);
-                    }
-
-                    actionsDiv.appendChild(copyBtn);
-                    messageContainer.appendChild(actionsDiv);
-                }
 
                 messageDiv.appendChild(messageContainer);
 
@@ -1178,7 +1359,43 @@
                 this.chatHistory.appendChild(messageDiv);
                 this.scrollToBottom();
 
+                // Add action buttons for assistant messages (if content exists)
+                if (role === 'assistant' && !isError && content) {
+                    this.addMessageActions(messageDiv, content);
+                }
+
                 return messageId;
+            }
+
+            // NEW: Separate method to add action buttons
+            addMessageActions(messageDiv, content) {
+                const messageContainer = messageDiv.querySelector('div');
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'message-actions';
+
+                // Copy button
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'action-button';
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(content);
+                    copyBtn.innerHTML = '✓';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+                    }, 2000);
+                };
+
+                // TTS button (only if available)
+                if (this.ttsAvailable) {
+                    const ttsBtn = document.createElement('button');
+                    ttsBtn.className = 'action-button';
+                    ttsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                    ttsBtn.onclick = () => this.handleTTS(content, ttsBtn);
+                    actionsDiv.appendChild(ttsBtn);
+                }
+
+                actionsDiv.appendChild(copyBtn);
+                messageContainer.appendChild(actionsDiv);
             }
 
             addLoadingMessage() {
