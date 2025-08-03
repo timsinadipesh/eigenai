@@ -4,6 +4,7 @@ This implementation adds real-time token streaming using Server-Sent Events (SSE
 """
 
 import os
+import re
 import gc
 import json
 import logging
@@ -22,17 +23,38 @@ from transformers import AutoProcessor, AutoConfig
 import uvicorn
 from PIL import Image
 from contextlib import asynccontextmanager
+import librosa  # Add this import for audio processing
+import soundfile as sf
+from langdetect import detect, LangDetectException, DetectorFactory
 
 # For Server-Sent Events (SSE)
 from sse_starlette.sse import EventSourceResponse
+
+# Set seed for consistent language detection results
+DetectorFactory.seed = 0
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
+import os
+import re
+import hashlib
+import subprocess
+import logging
+from pathlib import Path
+from typing import Optional
+from langdetect import detect, LangDetectException, DetectorFactory
+
+# Set seed for consistent language detection results
+DetectorFactory.seed = 0
+
+logger = logging.getLogger(__name__)
+
+
 class PiperTTSEngine:
-    """Piper TTS integration for text-to-speech"""
+    """Piper TTS integration for text-to-speech with robust language detection"""
     
     def __init__(self):
         # Find the voices directory relative to this file
@@ -49,9 +71,31 @@ class PiperTTSEngine:
                 lang_short = lang_full.split("_")[0]      # "en"
                 self.voices[lang_full] = onnx_file
                 self.voices[lang_short] = onnx_file
+                logger.info(f"Found voice model: {lang_short} -> {onnx_file.name}")
 
         # Check if piper is available
         self.piper_available = self._check_piper_installation()
+        
+        # Pre-compile regex for text cleaning
+        self._text_cleaner = re.compile(r'[^\w\s\.\,\!\?\-\']')
+        
+        # Language detection cache for performance
+        self._detection_cache = {}
+        self._cache_max_size = 100
+        
+        # Language-specific keywords for short text detection
+        self.lang_keywords = {
+            'fr': {
+                'articles': ['le', 'la', 'les', 'un', 'une', 'des', 'du'],
+                'common': ['et', 'est', 'avec', 'pour', 'dans', 'sur', 'que', 'qui', 'mais', 'vous', 'nous', 'ils'],
+                'pronouns': ['je', 'tu', 'il', 'elle', 'on'],
+            },
+            'de': {
+                'articles': ['der', 'die', 'das', 'ein', 'eine', 'den', 'dem'],
+                'common': ['und', 'ist', 'mit', 'für', 'auf', 'von', 'zu', 'nicht', 'ich', 'sie', 'wir'],
+                'pronouns': ['ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr'],
+            }
+        }
         
     def _check_piper_installation(self) -> bool:
         """Check if piper is installed and available"""
@@ -63,41 +107,155 @@ class PiperTTSEngine:
             logger.warning("Piper TTS not found. TTS functionality disabled.")
             return False
     
-    def _detect_language(self, text: str) -> str:
-        """Simple language detection based on common words/patterns"""
+    def _detect_language_short_text(self, text: str) -> Optional[str]:
+        """Detect language for short texts using keyword analysis"""
         text_lower = text.lower()
+        words = set(text_lower.split())
         
-        # French indicators
-        french_words = ['le', 'la', 'les', 'de', 'du', 'des', 'un', 'une', 'et', 'est', 'avec', 'pour', 'dans', 'sur']
-        if any(word in text_lower.split() for word in french_words):
-            if "fr" in self.voices and self.voices["fr"].exists():
-                return "fr"
+        # Score each language based on keyword matches
+        scores = {}
         
-        # German indicators  
-        german_words = ['der', 'die', 'das', 'und', 'ist', 'mit', 'für', 'in', 'auf', 'von', 'zu', 'den', 'dem']
-        if any(word in text_lower.split() for word in german_words):
-            if "de" in self.voices and self.voices["de"].exists():
-                return "de"
+        for lang, keywords in self.lang_keywords.items():
+            score = 0
+            # Check articles (strong indicators)
+            for article in keywords['articles']:
+                if article in words:
+                    score += 3
+            # Check common words
+            for common in keywords['common']:
+                if common in words:
+                    score += 2
+            # Check pronouns
+            for pronoun in keywords['pronouns']:
+                if pronoun in words:
+                    score += 2
+            
+            if score > 0:
+                scores[lang] = score
         
-        # Default to English
-        return "en"
+        # Return language with highest score if confident enough
+        if scores:
+            best_lang = max(scores, key=scores.get)
+            if scores[best_lang] >= 4:  # Confidence threshold
+                return best_lang
+        
+        return None
+    
+    def _detect_language(self, text: str) -> str:
+        """
+        Robust language detection with fallback strategies.
+        Returns 'en', 'fr', or 'de' based on available voices.
+        """
+        try:
+            # Check cache first
+            text_sample = text[:200]  # Use first 200 chars for cache key
+            cache_key = hash(text_sample)
+            if cache_key in self._detection_cache:
+                return self._detection_cache[cache_key]
+            
+            # Clean text for detection
+            clean_text = self._text_cleaner.sub(' ', text).strip()
+            
+            # Strategy 1: Short text detection using keywords
+            if len(clean_text) < 30:
+                detected = self._detect_language_short_text(clean_text)
+                if detected and detected in self.voices:
+                    logger.info(f"Short text detection: {detected}")
+                    self._detection_cache[cache_key] = detected
+                    return detected
+                # For very short texts without clear indicators, default to English
+                if len(clean_text) < 15:
+                    logger.info("Very short text, defaulting to English")
+                    return 'en'
+            
+            # Strategy 2: Use langdetect for longer texts
+            try:
+                detected = detect(clean_text)
+                logger.info(f"Langdetect result: {detected}")
+                
+                # Map detected language to available voices
+                if detected in ['en', 'fr', 'de']:
+                    if detected in self.voices and self.voices[detected].exists():
+                        # Cache the result
+                        if len(self._detection_cache) < self._cache_max_size:
+                            self._detection_cache[cache_key] = detected
+                        return detected
+                    else:
+                        logger.warning(f"Voice for {detected} not available")
+                
+                # Handle other language codes that might map to our supported languages
+                lang_mapping = {
+                    'english': 'en',
+                    'french': 'fr', 
+                    'german': 'de',
+                    'deutsch': 'de',
+                    'francais': 'fr',
+                    'français': 'fr'
+                }
+                
+                if detected.lower() in lang_mapping:
+                    mapped_lang = lang_mapping[detected.lower()]
+                    if mapped_lang in self.voices:
+                        self._detection_cache[cache_key] = mapped_lang
+                        return mapped_lang
+                
+            except LangDetectException as e:
+                logger.warning(f"Langdetect failed: {e}")
+            
+            # Strategy 3: Fallback keyword detection for any length
+            if len(clean_text) >= 30:
+                detected = self._detect_language_short_text(clean_text)
+                if detected and detected in self.voices:
+                    logger.info(f"Fallback keyword detection: {detected}")
+                    self._detection_cache[cache_key] = detected
+                    return detected
+            
+            # Default to English
+            logger.info("All detection strategies failed, defaulting to English")
+            return 'en'
+            
+        except Exception as e:
+            logger.error(f"Language detection error: {e}")
+            return 'en'
     
     def _get_cache_path(self, text: str, language: str) -> Path:
-        """Generate cache file path based on text hash"""
+        """Generate cache file path based on text hash and language"""
         text_hash = hashlib.md5(text.encode()).hexdigest()
         return self.cache_dir / f"{text_hash}_{language}.wav"
     
-    async def synthesize(self, text: str, language: str = None) -> Optional[Path]:
-        """Synthesize text to speech using Piper"""
+    async def synthesize(self, text: str, language: Optional[str] = None) -> Optional[Path]:
+        """
+        Synthesize text to speech using Piper.
+        
+        Args:
+            text: The text to synthesize
+            language: Optional language code ('en', 'fr', 'de'). If None, auto-detects.
+        
+        Returns:
+            Path to the synthesized audio file, or None if synthesis failed
+        """
         
         if not self.piper_available:
+            logger.error("Piper TTS is not available")
             return None
         
-        # Auto-detect language if not specified
-        if language is None:
+        # Handle language parameter
+        if language is not None:
+            # Validate provided language
+            if language not in self.voices:
+                logger.warning(f"Requested language '{language}' not available, auto-detecting instead")
+                language = self._detect_language(text)
+            elif not self.voices[language].exists():
+                logger.warning(f"Voice model for '{language}' not found, auto-detecting instead")
+                language = self._detect_language(text)
+            else:
+                logger.info(f"Using requested language: {language}")
+        else:
+            # Auto-detect language
             language = self._detect_language(text)
+            logger.info(f"Auto-detected language: {language}")
         
-        # Check if voice model exists
+        # Final validation
         if language not in self.voices or not self.voices[language].exists():
             logger.warning(f"Voice model for {language} not found, falling back to English")
             language = "en"
@@ -112,7 +270,7 @@ class PiperTTSEngine:
             return cache_path
         
         try:
-            # Clean text for TTS (remove markdown, etc.)
+            # Clean text for TTS
             clean_text = self._clean_text_for_tts(text)
             
             # Run Piper TTS
@@ -121,6 +279,8 @@ class PiperTTSEngine:
                 "--model", str(self.voices[language]),
                 "--output_file", str(cache_path)
             ]
+            
+            logger.info(f"Running Piper TTS with model: {self.voices[language].name}")
             
             process = subprocess.Popen(
                 cmd,
@@ -133,38 +293,64 @@ class PiperTTSEngine:
             stdout, stderr = process.communicate(input=clean_text, timeout=30)
             
             if process.returncode == 0 and cache_path.exists():
-                logger.info(f"TTS synthesis complete: {cache_path}")
+                file_size = cache_path.stat().st_size
+                logger.info(f"TTS synthesis complete: {cache_path} ({file_size} bytes)")
                 return cache_path
             else:
-                logger.error(f"Piper TTS failed: {stderr}")
+                logger.error(f"Piper TTS failed with return code {process.returncode}")
+                if stderr:
+                    logger.error(f"Piper stderr: {stderr}")
                 return None
                 
         except subprocess.TimeoutExpired:
             process.kill()
-            logger.error("Piper TTS timed out")
+            logger.error("Piper TTS timed out after 30 seconds")
             return None
         except Exception as e:
             logger.error(f"TTS synthesis error: {e}")
             return None
     
     def _clean_text_for_tts(self, text: str) -> str:
-        """Clean text for better TTS synthesis"""
-        import re
-        
+        """Clean text for better TTS synthesis - no length limits"""
         # Remove markdown formatting
         text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Bold
-        text = re.sub(r'\*(.*?)\*', r'\1', text)      # Italic
-        text = re.sub(r'`(.*?)`', r'\1', text)        # Code
+        text = re.sub(r'\*(.*?)\*', r'\1', text)      # Italic  
         text = re.sub(r'#{1,6}\s', '', text)          # Headers
         
-        # Clean up extra whitespace
+        # Remove code blocks
+        text = re.sub(r'```[^`]*```', ' ', text)
+        
+        # Remove multiple spaces and newlines
         text = re.sub(r'\s+', ' ', text).strip()
         
-        # Limit length (Piper works better with shorter texts)
-        if len(text) > 1000:
-            text = text[:1000] + "..."
+        # Replace smart quotes and other special characters
+        replacements = {
+            '"': '"', '"': '"', ''': "'", ''': "'",
+            '–': '-', '—': '-', '…': '...'
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
         
         return text
+    
+    def clear_cache(self, language: Optional[str] = None):
+        """Clear TTS cache, optionally for a specific language"""
+        try:
+            if language:
+                # Clear only files for specific language
+                pattern = f"*_{language}.wav"
+                files = list(self.cache_dir.glob(pattern))
+                for file in files:
+                    file.unlink()
+                logger.info(f"Cleared {len(files)} cached files for language: {language}")
+            else:
+                # Clear all cache
+                files = list(self.cache_dir.glob("*.wav"))
+                for file in files:
+                    file.unlink()
+                logger.info(f"Cleared {len(files)} cached files")
+        except Exception as e:
+            logger.error(f"Error clearing cache: {e}")
 
 
 class LocalONNXGemmaEngine:
@@ -373,7 +559,6 @@ class LocalONNXGemmaEngine:
         gc.collect()
         logger.info("✓ Cleanup complete")
 
- 
     async def generate_response_stream(
         self, 
         messages: List[Dict], 
@@ -391,17 +576,33 @@ class LocalONNXGemmaEngine:
         logger.info(f"🎯 Starting advanced streaming generation (max_tokens: {max_new_tokens})")
 
         try:
-            # Prepare input
+            # No need to process audio here - just pass messages as-is to processor
+            # The processor will handle audio file loading internally
+            
+            # IMPORTANT: Must use return_tensors="pt" first!
             inputs = self.processor.apply_chat_template(
                 messages,
                 add_generation_prompt=True,
                 tokenize=True,
                 return_dict=True,
-                return_tensors="pt"
+                return_tensors="pt"  # PyTorch tensors required!
             )
+            
+            # Convert to numpy for ONNX
             input_ids = inputs["input_ids"].numpy()
             attention_mask = inputs["attention_mask"].numpy()
             position_ids = np.cumsum(attention_mask, axis=-1) - 1
+            
+            # Extract multimodal inputs if present
+            pixel_values = inputs["pixel_values"].numpy() if "pixel_values" in inputs else None
+            input_features = inputs["input_features"].numpy().astype(np.float32) if "input_features" in inputs else None
+            input_features_mask = inputs["input_features_mask"].numpy() if "input_features_mask" in inputs else None
+            
+            logger.info(f"Input processed: {input_ids.shape}")
+            if pixel_values is not None:
+                logger.info(f"Image input: {pixel_values.shape}")
+            if input_features is not None:
+                logger.info(f"Audio input: {input_features.shape}")
 
             batch_size = input_ids.shape[0]
             past_key_values = {
@@ -415,12 +616,45 @@ class LocalONNXGemmaEngine:
 
             all_generated_tokens = []
             decoded_text = ""
+            image_features = None
+            audio_features = None
 
             for step in range(max_new_tokens):
                 # Get embeddings
                 inputs_embeds, per_layer_inputs = self.embed_session.run(
                     None, {"input_ids": input_ids}
                 )
+                
+                # Process image features (once)
+                if image_features is None and pixel_values is not None:
+                    image_features = self.vision_session.run(
+                        ["image_features"],
+                        {"pixel_values": pixel_values}
+                    )[0]
+                    
+                    # Replace image tokens with image features
+                    mask = (input_ids == self.image_token_id).reshape(-1)
+                    if mask.any():
+                        flat_embeds = inputs_embeds.reshape(-1, inputs_embeds.shape[-1])
+                        flat_embeds[mask] = image_features.reshape(-1, image_features.shape[-1])
+                        inputs_embeds = flat_embeds.reshape(inputs_embeds.shape)
+                
+                # Process audio features (once)
+                if audio_features is None and input_features is not None and input_features_mask is not None:
+                    audio_features = self.audio_session.run(
+                        ["audio_features"],
+                        {
+                            "input_features": input_features,
+                            "input_features_mask": input_features_mask
+                        }
+                    )[0]
+                    
+                    # Replace audio tokens with audio features
+                    mask = (input_ids == self.audio_token_id).reshape(-1)
+                    if mask.any():
+                        flat_embeds = inputs_embeds.reshape(-1, inputs_embeds.shape[-1])
+                        flat_embeds[mask] = audio_features.reshape(-1, audio_features.shape[-1])
+                        inputs_embeds = flat_embeds.reshape(inputs_embeds.shape)
 
                 # Run decoder
                 outputs = self.decoder_session.run(None, {
@@ -434,7 +668,7 @@ class LocalONNXGemmaEngine:
 
                 # Greedy sampling
                 next_token = np.argmax(logits[:, -1], axis=-1, keepdims=True)
-                token_id = int(next_token[0])
+                token_id = next_token[0, 0].item()
                 all_generated_tokens.append(token_id)
 
                 # Incremental decoding
@@ -487,20 +721,20 @@ class LocalONNXGemmaEngine:
                 'finished': True
             }
         
-        async def generate_response(self, messages: List[Dict], max_new_tokens: int = 1000) -> str:
-            """
-            Non-streaming generation for backward compatibility
-            Collects all tokens from the streaming generator
-            """
-            
-            full_response = ""
-            async for chunk in self.generate_response_stream(messages, max_new_tokens):
-                if chunk.get('error'):
-                    raise HTTPException(status_code=500, detail=chunk['error'])
-                if not chunk['finished']:
-                    full_response += chunk['token']
-            
-            return full_response.strip()
+    async def generate_response(self, messages: List[Dict], max_new_tokens: int = 1000) -> str:
+        """
+        Non-streaming generation for backward compatibility
+        Collects all tokens from the streaming generator
+        """
+        
+        full_response = ""
+        async for chunk in self.generate_response_stream(messages, max_new_tokens):
+            if chunk.get('error'):
+                raise HTTPException(status_code=500, detail=chunk['error'])
+            if not chunk['finished']:
+                full_response += chunk['token']
+        
+        return full_response.strip()
 
 
 # Initialize the inference engine and TTS
