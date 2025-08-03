@@ -14,7 +14,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
-            background: #ffffff;
+            background: #f8f9fa;
             color: #1a1a1a;
             height: 100vh;
             overflow: hidden;
@@ -28,15 +28,46 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            max-width: 1000px; /* Increased from 600px to 1000px */
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            background: #f8f9fa;
+            overflow-y: auto;
+        }
+
+        .content-wrapper {
+            max-width: 1000px;
             margin: 0 auto;
-            background: #ffffff;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .chat-history {
+            flex: 1;
+            overflow: visible;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: #f8f9fa;
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .input-section {
+            width: 100%;
+            background: #f8f9fa;
+            padding: 20px 24px;
+            max-width: 1000px;
+            margin: 0 auto;
         }
 
         .status-bar {
             background: #f8f9fa;
-            padding: 12px 24px;
-            border-bottom: 1px solid #e5e5e5;
+            padding: 8px 140px;
             font-size: 14px;
             color: #666666;
             display: flex;
@@ -93,29 +124,7 @@
             fill: currentColor;
         }
 
-        /* NEW: Streaming indicator */
-        .streaming-indicator {
-            background: #28a745;
-            color: white;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            display: none;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .streaming-indicator.active {
-            display: flex;
-            animation: streamPulse 1.5s infinite;
-        }
-
-        @keyframes streamPulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
+        /* Removed streaming indicator styles */
 
         .chat-history {
             flex: 1;
@@ -124,7 +133,7 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
-            background: #ffffff;
+            background: #f8f9fa;
         }
 
         .message {
@@ -244,7 +253,7 @@
             font-style: italic;
         }
 
-        /* NEW: Streaming cursor */
+        /* Streaming cursor */
         .streaming-cursor {
             display: inline-block;
             width: 2px;
@@ -345,8 +354,7 @@
 
         .input-section {
             width: 100%;
-            background: #ffffff;
-            border-top: 1px solid #e5e5e5;
+            background: #f8f9fa;
             padding: 20px 24px;
         }
 
@@ -394,7 +402,8 @@
 
         .input-container {
             position: relative;
-            width: 100%;
+            width: 80%;
+            margin: 0 auto;
         }
 
         .input-field {
@@ -590,44 +599,24 @@
             font-size: 14px;
         }
 
-        /* NEW: Streaming toggle control */
-        .streaming-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-            font-size: 14px;
-            color: #666666;
+        /* Removed streaming controls styles */
+
+        /* Scrollbar styling - removed chat-history specific scrollbar, uses body default */
+        body::-webkit-scrollbar {
+            width: 8px;
         }
 
-        .streaming-toggle {
-            display: flex;
-            align-items: center;
-            gap: 6px;
+        body::-webkit-scrollbar-track {
+            background: #f1f1f1;
         }
 
-        .streaming-checkbox {
-            width: 16px;
-            height: 16px;
-            accent-color: #0066cc;
+        body::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
         }
 
-        /* Scrollbar styling */
-        .chat-history::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .chat-history::-webkit-scrollbar-track {
-            background: #f8f9fa;
-        }
-
-        .chat-history::-webkit-scrollbar-thumb {
-            background: #d1d5db;
-            border-radius: 3px;
-        }
-
-        .chat-history::-webkit-scrollbar-thumb:hover {
-            background: #9ca3af;
+        body::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
         }
 
         /* Mobile Responsive */
@@ -656,6 +645,10 @@
                 width: 18px;
                 height: 18px;
             }
+
+            .status-bar {
+                padding: 8px 24px;
+            }
         }
     </style>
 </head>
@@ -669,16 +662,14 @@
                     </svg>
                     back
                 </button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="mode-indicator" class="mode-indicator">CHAT</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
                 <div class="status-indicator">
                     <div class="status-dot" id="status-dot"></div>
                 </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <!-- NEW: Streaming indicator -->
-                <div class="streaming-indicator" id="streaming-indicator">
-                    🌊 Streaming...
-                </div>
-                <span id="mode-indicator" class="mode-indicator" style="display: none;"></span>
             </div>
         </div>
 
@@ -692,13 +683,7 @@
         <div class="input-section">
             <div class="attachments" id="attachment-display"></div>
             
-            <!-- NEW: Streaming controls -->
-            <div class="streaming-controls">
-                <div class="streaming-toggle">
-                    <input type="checkbox" id="streaming-checkbox" class="streaming-checkbox" checked>
-                    <label for="streaming-checkbox">Enable token streaming</label>
-                </div>
-            </div>
+            <!-- Removed streaming controls -->
             
             <div class="input-container">
                 <button class="attachment-button" id="attachment-btn">
@@ -746,10 +731,6 @@
                 this.backBtn = document.getElementById('back-btn');
                 this.modeIndicator = document.getElementById('mode-indicator');
                 
-                // NEW: Streaming elements
-                this.streamingCheckbox = document.getElementById('streaming-checkbox');
-                this.streamingIndicator = document.getElementById('streaming-indicator');
-                
                 this.attachedFiles = new Map();
                 this.isGenerating = false;
                 this.isRecording = false;
@@ -759,7 +740,7 @@
                 this.ttsAvailable = false;
                 this.currentAudio = null;
                 
-                // NEW: Streaming state
+                // Streaming state (still used internally, just removed UI controls)
                 this.isStreaming = false;
                 this.currentStreamingMessage = null;
                 
@@ -867,16 +848,12 @@
                     'teacher': 'Language Teacher',
                     'quickie': 'Quick Mode',
                     'direct': 'Chat',
-                    'general': ''
+                    'general': 'CHAT'
                 };
                 
-                const modeName = modeNames[this.currentMode] || '';
-                if (modeName) {
-                    this.modeIndicator.textContent = modeName;
-                    this.modeIndicator.style.display = 'block';
-                } else {
-                    this.modeIndicator.style.display = 'none';
-                }
+                const modeName = modeNames[this.currentMode] || 'CHAT';
+                this.modeIndicator.textContent = modeName;
+                this.modeIndicator.style.display = 'block';
             }
 
             autoResizeTextarea() {
@@ -898,7 +875,6 @@
                 const hasFiles = this.attachedFiles.size > 0;
                 this.sendBtn.disabled = !hasText && !hasFiles;
                 
-                // NEW: Update button text based on streaming/generating state
                 if (this.isGenerating) {
                     this.sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>'; // Stop icon
                 } else {
@@ -1013,7 +989,6 @@
             }
 
             async handleSubmit() {
-                // NEW: Handle stop generation if currently generating
                 if (this.isGenerating) {
                     this.stopGeneration();
                     return;
@@ -1065,27 +1040,21 @@
                         }
                     });
 
-                    // NEW: Choose streaming or non-streaming based on checkbox
-                    if (this.streamingCheckbox.checked) {
-                        await this.handleStreamingGeneration(formData);
-                    } else {
-                        await this.handleNonStreamingGeneration(formData);
-                    }
+                    // Default to streaming (removed checkbox)
+                    await this.handleStreamingGeneration(formData);
 
                 } catch (error) {
                     this.addMessage('assistant', `Error: ${error.message}`, null, true);
                 } finally {
                     this.isGenerating = false;
                     this.isStreaming = false;
-                    this.streamingIndicator.classList.remove('active');
                     this.updateSendButton();
                 }
             }
 
-            // NEW: Streaming generation method
+            // Streaming generation method
             async handleStreamingGeneration(formData) {
                 this.isStreaming = true;
-                this.streamingIndicator.classList.add('active');
                 
                 // Create assistant message bubble for streaming
                 const assistantMessageId = this.addMessage('assistant', '');
@@ -1169,38 +1138,10 @@
                 }
             }
 
-            // NEW: Non-streaming generation method (original)
-            async handleNonStreamingGeneration(formData) {
-                // Show loading
-                const loadingId = this.addLoadingMessage();
-
-                try {
-                    const response = await fetch('/api/generate', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-
-                    const data = await response.json();
-                    
-                    // Remove loading and add response
-                    this.removeMessage(loadingId);
-                    this.addMessage('assistant', data.response);
-
-                } catch (error) {
-                    this.removeMessage(loadingId);
-                    throw error;
-                }
-            }
-
-            // NEW: Stop generation method
+            // Stop generation method
             stopGeneration() {
                 this.isGenerating = false;
                 this.isStreaming = false;
-                this.streamingIndicator.classList.remove('active');
                 this.updateSendButton();
                 
                 // Remove streaming cursor if present
@@ -1359,21 +1300,21 @@
                 this.chatHistory.appendChild(messageDiv);
                 this.scrollToBottom();
 
-                // Add action buttons for assistant messages (if content exists)
-                if (role === 'assistant' && !isError && content) {
+                // Add action buttons for both user and assistant messages (if content exists)
+                if (!isError && content) {
                     this.addMessageActions(messageDiv, content);
                 }
 
                 return messageId;
             }
 
-            // NEW: Separate method to add action buttons
+            // Method to add action buttons - now supports both user and assistant messages
             addMessageActions(messageDiv, content) {
                 const messageContainer = messageDiv.querySelector('div');
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'message-actions';
 
-                // Copy button
+                // Copy button for all messages
                 const copyBtn = document.createElement('button');
                 copyBtn.className = 'action-button';
                 copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
@@ -1385,8 +1326,8 @@
                     }, 2000);
                 };
 
-                // TTS button (only if available)
-                if (this.ttsAvailable) {
+                // TTS button (only for assistant messages and only if available)
+                if (messageDiv.classList.contains('assistant') && this.ttsAvailable) {
                     const ttsBtn = document.createElement('button');
                     ttsBtn.className = 'action-button';
                     ttsBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
@@ -1440,7 +1381,10 @@
             }
 
             scrollToBottom() {
-                this.chatHistory.scrollTop = this.chatHistory.scrollHeight;
+                window.scrollTo({
+                    top: document.body.scrollHeight,
+                    behavior: 'smooth'
+                });
             }
 
             // Utility method to format file size
