@@ -531,6 +531,9 @@ class LandingPage {
     const chatInput = document.getElementById('chat-input');
     const currentMessage = chatInput.value.trim();
     
+    // Determine the target URL based on mode
+    const targetUrl = mode === 'translator' ? 'static/transl.html' : 'static/chat.html';
+    
     if (currentMessage || this.attachedFiles.size > 0) {
       // Store the data to pass to chat
       const chatData = {
@@ -556,12 +559,12 @@ class LandingPage {
       ).then((filesData) => {
         chatData.files = filesData;
         sessionStorage.setItem('chatTransition', JSON.stringify(chatData));
-        window.location.href = 'static/chat.html';
+        window.location.href = targetUrl;
       });
     } else {
       // Just go to chat with mode
       sessionStorage.setItem('chatTransition', JSON.stringify({ mode, timestamp: Date.now() }));
-      window.location.href = 'static/chat.html';
+      window.location.href = targetUrl;
     }
   }
 

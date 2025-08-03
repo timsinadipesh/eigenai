@@ -42,6 +42,7 @@ class ChatTemplate {
         this.currentAudio = null;
         this.isStreaming = false;
         this.currentStreamingMessage = null;
+        this.abortController = null;
         
         // Initialize markdown-it
         this.md = markdownit({
@@ -1054,26 +1055,26 @@ class ChatTemplate {
         this.isGenerating = true;
         this.updateSendButton();
 
-        // Process message - can be overridden by subclasses
         const processedMessage = this.processMessage(message);
-
-        // Store attachments for the message before clearing
         const messageAttachments = new Map(this.attachedFiles);
-
-        // Add user message to chat
         this.addMessage('user', message, messageAttachments);
         
-        // Clear input and attachments immediately
         this.messageInput.value = '';
         this.autoResizeTextarea();
         this.clearAttachments();
         
+        // Prepare the UI for the assistant's response
+        this.currentStreamingMessage = this.addMessage('assistant', '');
+        const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+        const cursor = document.createElement('span');
+        cursor.className = 'streaming-cursor';
+        messageContent.appendChild(cursor);
+
         try {
             const formData = new FormData();
             formData.append('text', processedMessage);
             formData.append('max_tokens', this.config.maxTokens.toString());
             
-            // Add attached files from the stored copy
             messageAttachments.forEach((file, name) => {
                 if (file.type.startsWith('image/')) {
                     formData.append('image', file);
@@ -1082,14 +1083,41 @@ class ChatTemplate {
                 }
             });
 
-            await this.handleStreamingGeneration(formData);
+            const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
+            
+            // Final UI update on success
+            cursor.remove();
+            this.addMessageActions(this.currentStreamingMessage, fullResponse);
 
         } catch (error) {
-            this.addMessage('assistant', `Error: ${error.message}`, null, true);
+            // Check if we still have a valid streaming message before accessing it
+            if (this.currentStreamingMessage) {
+                const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                if (messageContent) {
+                    cursor.remove(); // Remove cursor
+                    
+                    if (error.name === 'AbortError') {
+                        console.log('Generation stopped by user.');
+                        const stoppedDiv = document.createElement('div');
+                        stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
+                        stoppedDiv.textContent = '[Generation stopped]';
+                        messageContent.appendChild(stoppedDiv);
+                        
+                        const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
+                        if (textContent) {
+                            this.addMessageActions(this.currentStreamingMessage, textContent);
+                        }
+                    } else {
+                        messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
+                    }
+                }
+            }
         } finally {
             this.isGenerating = false;
             this.isStreaming = false;
             this.updateSendButton();
+            this.abortController = null;
+            this.currentStreamingMessage = null;
         }
     }
 
@@ -1103,96 +1131,67 @@ class ChatTemplate {
     /**
      * Handle streaming generation
      */
-    async handleStreamingGeneration(formData) {
-        this.isStreaming = true;
+    async handleStreamingGeneration(formData, messageContent, cursor) {
+        this.abortController = new AbortController();
         
-        // Create assistant message bubble for streaming
-        const assistantMessageId = this.addMessage('assistant', '');
-        this.currentStreamingMessage = document.getElementById(assistantMessageId);
-        const messageContent = this.currentStreamingMessage.querySelector('.message-content');
-        
-        // Add cursor for streaming effect
-        const cursor = document.createElement('span');
-        cursor.className = 'streaming-cursor';
-        messageContent.appendChild(cursor);
+        const response = await fetch(this.config.generateEndpoint, {
+            method: 'POST',
+            body: formData,
+            signal: this.abortController.signal
+        });
 
-        try {
-            const response = await fetch(this.config.generateEndpoint, {
-                method: 'POST',
-                body: formData
-            });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponse = '';
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let fullResponse = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-            while (true) {
-                const { done, value } = await reader.read();
-                
-                if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
 
-                buffer += decoder.decode(value, { stream: true });
-                
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.substring(6));
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.substring(6));
+                        if (data.error) throw new Error(data.error);
+                        
+                        if (!data.finished && data.token) {
+                            fullResponse += data.token;
+                            const textDiv = document.createElement('div');
+                            textDiv.innerHTML = this.md.render(fullResponse);
                             
-                            if (data.error) {
-                                throw new Error(data.error);
-                            }
-                            
-                            if (!data.finished && data.token) {
-                                fullResponse += data.token;
-                                
-                                const textDiv = document.createElement('div');
-                                textDiv.innerHTML = this.md.render(fullResponse);
-                                
-                                messageContent.innerHTML = '';
-                                messageContent.appendChild(textDiv);
-                                messageContent.appendChild(cursor);
-                                
-                                this.scrollToBottom();
-                            }
-                            
-                            if (data.finished) {
-                                cursor.remove();
-                                this.addMessageActions(this.currentStreamingMessage, fullResponse);
-                                return;
-                            }
-                        } catch (parseError) {
-                            console.error('Failed to parse SSE data:', parseError);
+                            messageContent.innerHTML = '';
+                            messageContent.appendChild(textDiv);
+                            messageContent.appendChild(cursor);
+                            this.scrollToBottom();
                         }
+                        
+                        if (data.finished) {
+                            return fullResponse; // Return full response on success
+                        }
+                    } catch (parseError) {
+                        console.error('Failed to parse SSE data:', parseError);
                     }
                 }
             }
-        } catch (error) {
-            cursor.remove();
-            messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
-            throw error;
         }
+        return fullResponse; // Return whatever was streamed if loop finishes unexpectedly
     }
 
     /**
      * Stop generation
      */
     stopGeneration() {
-        this.isGenerating = false;
-        this.isStreaming = false;
-        this.updateSendButton();
-        
-        if (this.currentStreamingMessage) {
-            const cursor = this.currentStreamingMessage.querySelector('.streaming-cursor');
-            if (cursor) cursor.remove();
-            this.currentStreamingMessage = null;
+        if (this.abortController) {
+            this.abortController.abort();
         }
     }
 
@@ -1267,7 +1266,7 @@ class ChatTemplate {
             this.addMessageActions(messageDiv, content);
         }
 
-        return messageId;
+        return messageDiv;
     }
 
     /**
