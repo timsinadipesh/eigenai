@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>frende - Translator</title>
+    <script src="./js/markdown-it.min.js"></script> 
+    <script src="./js/chat-template.js"></script>
+</head>
+<body>
+    <script>
+        // Translator Implementation using ChatTemplate
+        class TranslatorApp extends ChatTemplate {
+            constructor() {
+                super({
+                    modeText: 'TRANSLATOR',
+                    backUrl: '/',
+                    welcomeTitle: 'Translate with frende',
+                    welcomeSubtitle: 'Translate text between languages instantly',
+                    placeholder: 'Enter text to translate...',
+                    
+                    // Translator might not need audio recording but keeps other features
+                    enableTTS: true,
+                    enableAttachments: true,
+                    enableAudio: false, // Disable audio recording for translator
+                    enableSettings: true,
+                    
+                    // Custom API endpoint for translation
+                    generateEndpoint: '/api/translate/stream',
+                    
+                    // Settings callback
+                    onSettingsClick: () => {
+                        console.log('Settings clicked for Translator mode');
+                        // Could open language selection modal, etc.
+                        this.showLanguageSettings();
+                    }
+                });
+            }
+
+            // Override message processing for translation
+            processMessage(message) {
+                // Add translation context or prefixes
+                return `Translate the following text: "${message}"`;
+            }
+
+            // Custom settings handler for translator
+            showLanguageSettings() {
+                // Example: could create a modal for language selection
+                alert('Language settings would open here');
+            }
+        }
+
+        // Initialize the translator app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', async () => {
+            const app = new TranslatorApp();
+            await app.initialize();
+            
+            // Handle transition data from landing page if present
+            app.handleTransitionData();
+        });
+    </script>
+</body>
+</html>
