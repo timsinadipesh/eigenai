@@ -6,6 +6,139 @@
     <title>frende - Translator</title>
     <script src="./js/markdown-it.min.js"></script> 
     <script src="./js/chat-template.js"></script>
+    <style>
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .modal h2 {
+            margin: 0 0 24px 0;
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            text-align: center;
+        }
+
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-input {
+            padding: 12px 16px;
+            border: 2px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 200ms ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+
+        .form-textarea {
+            padding: 12px 16px;
+            border: 2px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            resize: vertical;
+            min-height: 100px;
+            transition: border-color 200ms ease;
+        }
+
+        .form-textarea:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .modal-button {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 200ms ease;
+        }
+
+        .modal-button.primary {
+            background: #0066cc;
+            color: white;
+        }
+
+        .modal-button.primary:hover {
+            background: #0056b3;
+        }
+
+        .modal-button.secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .modal-button.secondary:hover {
+            background: #e5e5e5;
+        }
+
+        .modal-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 600px) {
+            .modal {
+                padding: 24px;
+                margin: 20px;
+            }
+
+            .modal-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
 <body>
     <script>
@@ -24,28 +157,287 @@
                     enableAudio: true,
                     enableSettings: true,
                     
-                    // Custom API endpoint for translation
-                    generateEndpoint: '/api/translate/stream',
+                    // Use standard generate endpoint like chat.html
+                    generateEndpoint: '/api/generate/stream',
                     
                     // Settings callback
                     onSettingsClick: () => {
-                        console.log('Settings clicked for Translator mode');
-                        // Could open language selection modal, etc.
                         this.showLanguageSettings();
                     }
                 });
+
+                // Translation settings
+                this.language1 = 'English';
+                this.language2 = '';
+                this.systemPrompt = '';
+                this.settingsConfigured = false;
             }
 
-            // Override message processing for translation
+            // FIXED: Override message processing to properly include system prompt
             processMessage(message) {
-                // Add translation context or prefixes
-                return `Translate the following text: "${message}"`;
+                // Always use the configured system prompt if available
+                if (this.systemPrompt) {
+                    // If there is a text message, append it as the input.
+                    if (message) {
+                        return this.systemPrompt + "\n\nInput: " + message;
+                    } else {
+                        // If there is no text message (e.g., only an audio attachment),
+                        // send only the system prompt. The model will apply these instructions
+                        // to the other modalities (like audio) in the request.
+                        return this.systemPrompt;
+                    }
+                }
+
+                // Fallback if no system prompt is set (no changes needed here)
+                return `You are a translator between ${this.language1} and ${this.language2}. Detect the input language and translate to the other language. Only output the translation: "${message}"`;
             }
 
-            // Custom settings handler for translator
+            // FIXED: Generate better system prompt for translation
+            generateSystemPrompt(lang1, lang2) {
+                return `You are a professional translator specializing in ${lang1} and ${lang2}. Your task is to:
+
+        1. For TEXT input: Detect if it's in ${lang1} or ${lang2}, then translate to the other language
+        2. For AUDIO input: First transcribe the audio (it will be in either ${lang1} or ${lang2}), then translate to the other language
+        3. For any other input: Process appropriately and translate between the two languages
+
+        CRITICAL RULES:
+        - Always output ONLY the final translation
+        - No explanations, no source language labels, no extra text
+        - If input is ${lang1} → translate to ${lang2}
+        - If input is ${lang2} → translate to ${lang1}
+        - For audio: transcribe first, then translate (but only show final translation)
+
+        Examples:
+        Input (${lang1}): "Hello, how are you?"
+        Output: [translation in ${lang2}]
+
+        Input (${lang2}): [text in ${lang2}]
+        Output: [translation in ${lang1}]`;
+            }
+
+            // FIXED: Override handleSubmit to ensure system prompt is sent
+            async handleSubmit() {
+                if (this.isGenerating) {
+                    this.stopGeneration();
+                    return;
+                }
+                
+                const message = this.messageInput.value.trim();
+                if (!message && this.attachedFiles.size === 0) return;
+
+                // Check if settings are configured
+                if (!this.settingsConfigured) {
+                    alert('Please configure translation languages first (click the settings button)');
+                    return;
+                }
+
+                this.isGenerating = true;
+                this.updateSendButton();
+
+                // IMPORTANT: Process message to include system prompt
+                const processedMessage = this.processMessage(message);
+                const messageAttachments = new Map(this.attachedFiles);
+                
+                // Show the original user message (without system prompt)
+                this.addMessage('user', message, messageAttachments);
+                
+                this.messageInput.value = '';
+                this.autoResizeTextarea();
+                this.clearAttachments();
+                
+                // Prepare the UI for the assistant's response
+                this.currentStreamingMessage = this.addMessage('assistant', '');
+                const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                const cursor = document.createElement('span');
+                cursor.className = 'streaming-cursor';
+                messageContent.appendChild(cursor);
+
+                try {
+                    const formData = new FormData();
+                    // Send the processed message (with system prompt)
+                    formData.append('text', processedMessage);
+                    formData.append('max_tokens', this.config.maxTokens.toString());
+                    
+                    messageAttachments.forEach((file, name) => {
+                        if (file.type.startsWith('image/')) {
+                            formData.append('image', file);
+                        } else if (file.type.startsWith('audio/')) {
+                            formData.append('audio', file);
+                        }
+                    });
+
+                    const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
+                    
+                    // Final UI update on success
+                    cursor.remove();
+                    this.addMessageActions(this.currentStreamingMessage, fullResponse);
+
+                } catch (error) {
+                    // Error handling (same as parent class)
+                    if (this.currentStreamingMessage) {
+                        const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                        if (messageContent) {
+                            cursor.remove();
+                            
+                            if (error.name === 'AbortError') {
+                                console.log('Generation stopped by user.');
+                                const stoppedDiv = document.createElement('div');
+                                stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
+                                stoppedDiv.textContent = '[Generation stopped]';
+                                messageContent.appendChild(stoppedDiv);
+                                
+                                const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
+                                if (textContent) {
+                                    this.addMessageActions(this.currentStreamingMessage, textContent);
+                                }
+                            } else {
+                                messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
+                            }
+                        }
+                    }
+                } finally {
+                    this.isGenerating = false;
+                    this.isStreaming = false;
+                    this.updateSendButton();
+                    this.abortController = null;
+                    this.currentStreamingMessage = null;
+                }
+            }
+
+            // Rest of the methods remain the same...
             showLanguageSettings() {
-                // Example: could create a modal for language selection
-                alert('Language settings would open here');
+                const modal = this.createLanguageModal();
+                document.body.appendChild(modal);
+            }
+
+            createLanguageModal() {
+                const overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+
+                modal.innerHTML = `
+                    <h2>Translation Settings</h2>
+                    <form class="modal-form" id="translation-form">
+                        <div class="form-group">
+                            <label class="form-label" for="language1">Language 1:</label>
+                            <input type="text" id="language1" class="form-input" value="${this.language1}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="language2">Language 2:</label>
+                            <input type="text" id="language2" class="form-input" value="${this.language2}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="system-prompt">System Prompt:</label>
+                            <textarea id="system-prompt" class="form-textarea" placeholder="System prompt will be auto-generated based on languages...">${this.systemPrompt}</textarea>
+                        </div>
+                        
+                        <div class="modal-buttons">
+                            <button type="button" class="modal-button secondary" id="cancel-btn">Cancel</button>
+                            <button type="submit" class="modal-button primary" id="save-btn">Save Settings</button>
+                        </div>
+                    </form>
+                `;
+
+                overlay.appendChild(modal);
+
+                const form = modal.querySelector('#translation-form');
+                const lang1Input = modal.querySelector('#language1');
+                const lang2Input = modal.querySelector('#language2');
+                const systemPromptInput = modal.querySelector('#system-prompt');
+                const cancelBtn = modal.querySelector('#cancel-btn');
+                const saveBtn = modal.querySelector('#save-btn');
+
+                const updateSystemPrompt = () => {
+                    const l1 = lang1Input.value.trim();
+                    const l2 = lang2Input.value.trim();
+                    if (l1 && l2) {
+                        systemPromptInput.value = this.generateSystemPrompt(l1, l2);
+                    }
+                };
+
+                lang1Input.addEventListener('input', updateSystemPrompt);
+                lang2Input.addEventListener('input', updateSystemPrompt);
+
+                if (this.language1 && this.language2 && !this.systemPrompt) {
+                    updateSystemPrompt();
+                }
+
+                cancelBtn.addEventListener('click', () => {
+                    if (!this.settingsConfigured) {
+                        window.location.href = '/';
+                    } else {
+                        overlay.remove();
+                    }
+                });
+
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    
+                    const l1 = lang1Input.value.trim();
+                    const l2 = lang2Input.value.trim();
+                    const prompt = systemPromptInput.value.trim();
+
+                    if (!l1 || !l2) {
+                        alert('Please fill in both languages');
+                        return;
+                    }
+
+                    this.language1 = l1;
+                    this.language2 = l2;
+                    this.systemPrompt = prompt;
+                    this.settingsConfigured = true;
+
+                    this.updateWelcomeMessage();
+                    overlay.remove();
+                });
+
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        if (!this.settingsConfigured) {
+                            window.location.href = '/';
+                        } else {
+                            overlay.remove();
+                        }
+                    }
+                });
+
+                return overlay;
+            }
+
+            updateWelcomeMessage() {
+                const welcomeMsg = this.chatHistory.querySelector('.welcome-message');
+                if (welcomeMsg && this.language1 && this.language2) {
+                    welcomeMsg.innerHTML = `
+                        <p>Translate with frende</p>
+                        <p>Translating between ${this.language1} and ${this.language2}</p>
+                    `;
+                }
+            }
+
+            async initialize() {
+                await super.initialize();
+
+                const transitionData = sessionStorage.getItem('chatTransition');
+                let hasTransitionData = false;
+
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        hasTransitionData = data.message || (data.files && data.files.length > 0);
+                    } catch (e) {
+                        // Ignore parsing errors
+                    }
+                }
+
+                if (!hasTransitionData) {
+                    setTimeout(() => {
+                        this.showLanguageSettings();
+                    }, 500);
+                }
             }
         }
 
