@@ -421,76 +421,119 @@ Do not include any other text, explanations, or formatting outside of this JSON 
                                 const data = JSON.parse(line.substring(6));
                                 if (data.error) throw new Error(data.error);
                                 
-                                if (!data.finished && data.token) {
-                                    if (isCollectingJson && !jsonParsed) {
-                                        // Collect JSON tokens
-                                        jsonBuffer += data.token;
-                                        fullResponse += data.token;
-                                        
-                                        // Only try parsing when we have both opening and closing braces
-                                        if (jsonBuffer.includes('{') && jsonBuffer.includes('}')) {
-                                            try {
-                                                // Find the first complete JSON object
+                                if (isCollectingJson && !jsonParsed) {
+                                    jsonBuffer += data.token;
+                                    fullResponse += data.token;
+                                    
+                                    // Try to extract and stream partial content
+                                    if (jsonBuffer.includes('{')) {
+                                        try {
+                                            // Look for partial JSON fields as they're being generated
+                                            const transcriptMatch = jsonBuffer.match(/"transcript":\s*"([^"]*(?:\\.[^"]*)*)"?/);
+                                            const translationMatch = jsonBuffer.match(/"translation":\s*"([^"]*(?:\\.[^"]*)*)"?/);
+                                            const sourceLanguageMatch = jsonBuffer.match(/"source_language":\s*"([^"]*)"?/);
+                                            const targetLanguageMatch = jsonBuffer.match(/"target_language":\s*"([^"]*)"?/);
+                                            
+                                            // Create transcript message if we have source language and some transcript content
+                                            if (!this.currentTranscriptMessage && sourceLanguageMatch && transcriptMatch) {
+                                                // Remove temporary streaming message
+                                                if (this.currentStreamingMessage && this.currentStreamingMessage.parentNode) {
+                                                    this.currentStreamingMessage.remove();
+                                                    this.currentStreamingMessage = null;
+                                                }
+                                                
+                                                this.currentTranscriptMessage = this.addMessage('assistant', '');
+                                                const transcriptContent = this.currentTranscriptMessage.querySelector('.message-content');
+                                                const transcriptLabel = document.createElement('span');
+                                                transcriptLabel.className = 'transcript-label';
+                                                transcriptLabel.textContent = `Transcript (${sourceLanguageMatch[1]})`;
+                                                transcriptContent.appendChild(transcriptLabel);
+                                                
+                                                const transcriptDiv = document.createElement('div');
+                                                transcriptDiv.className = 'streaming-transcript';
+                                                transcriptContent.appendChild(transcriptDiv);
+                                                
+                                                const transcriptCursor = document.createElement('span');
+                                                transcriptCursor.className = 'streaming-cursor';
+                                                transcriptContent.appendChild(transcriptCursor);
+                                            }
+                                            
+                                            // Update transcript content
+                                            if (this.currentTranscriptMessage && transcriptMatch) {
+                                                const transcriptDiv = this.currentTranscriptMessage.querySelector('.streaming-transcript');
+                                                if (transcriptDiv) {
+                                                    // Unescape JSON string and render
+                                                    const unescapedTranscript = transcriptMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                                                    transcriptDiv.innerHTML = this.md.render(unescapedTranscript);
+                                                }
+                                            }
+                                            
+                                            // Create translation message if we have target language and some translation content
+                                            if (!this.currentTranslationMessage && targetLanguageMatch && translationMatch) {
+                                                this.currentTranslationMessage = this.addMessage('assistant', '');
+                                                const translationContent = this.currentTranslationMessage.querySelector('.message-content');
+                                                const translationLabel = document.createElement('span');
+                                                translationLabel.className = 'translation-label';
+                                                translationLabel.textContent = `Translation (${targetLanguageMatch[1]})`;
+                                                translationContent.appendChild(translationLabel);
+                                                
+                                                const translationDiv = document.createElement('div');
+                                                translationDiv.className = 'streaming-translation';
+                                                translationContent.appendChild(translationDiv);
+                                                
+                                                const translationCursor = document.createElement('span');
+                                                translationCursor.className = 'streaming-cursor';
+                                                translationContent.appendChild(translationCursor);
+                                            }
+                                            
+                                            // Update translation content
+                                            if (this.currentTranslationMessage && translationMatch) {
+                                                const translationDiv = this.currentTranslationMessage.querySelector('.streaming-translation');
+                                                if (translationDiv) {
+                                                    // Unescape JSON string and render
+                                                    const unescapedTranslation = translationMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                                                    translationDiv.innerHTML = this.md.render(unescapedTranslation);
+                                                }
+                                            }
+                                            
+                                            // Check if JSON is complete for final cleanup
+                                            if (jsonBuffer.includes('}') && transcriptMatch && translationMatch) {
                                                 const startIndex = jsonBuffer.indexOf('{');
                                                 const endIndex = jsonBuffer.lastIndexOf('}');
                                                 if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-                                                    const jsonStr = jsonBuffer.substring(startIndex, endIndex + 1);
-                                                    const jsonResponse = JSON.parse(jsonStr);
-                                                    
-                                                    if (jsonResponse.transcript && jsonResponse.translation) {
-                                                        jsonParsed = true;
+                                                    try {
+                                                        const jsonStr = jsonBuffer.substring(startIndex, endIndex + 1);
+                                                        const jsonResponse = JSON.parse(jsonStr);
                                                         
-                                                        // Remove the temporary streaming message
-                                                        if (this.currentStreamingMessage && this.currentStreamingMessage.parentNode) {
-                                                            this.currentStreamingMessage.remove();
+                                                        if (jsonResponse.transcript && jsonResponse.translation) {
+                                                            jsonParsed = true;
+                                                            
+                                                            // Remove cursors and add final actions
+                                                            if (this.currentTranscriptMessage) {
+                                                                const transcriptCursor = this.currentTranscriptMessage.querySelector('.streaming-cursor');
+                                                                if (transcriptCursor) transcriptCursor.remove();
+                                                                this.addMessageActions(this.currentTranscriptMessage, jsonResponse.transcript);
+                                                            }
+                                                            
+                                                            if (this.currentTranslationMessage) {
+                                                                const translationCursor = this.currentTranslationMessage.querySelector('.streaming-cursor');
+                                                                if (translationCursor) translationCursor.remove();
+                                                                this.addMessageActions(this.currentTranslationMessage, jsonResponse.translation);
+                                                            }
+                                                            
+                                                            fullResponse = jsonResponse.translation;
                                                         }
-                                                        
-                                                        // Create transcript message
-                                                        this.currentTranscriptMessage = this.addMessage('assistant', '');
-                                                        const transcriptContent = this.currentTranscriptMessage.querySelector('.message-content');
-                                                        const transcriptLabel = document.createElement('span');
-                                                        transcriptLabel.className = 'transcript-label';
-                                                        transcriptLabel.textContent = `Transcript (${jsonResponse.source_language})`;
-                                                        transcriptContent.appendChild(transcriptLabel);
-                                                        
-                                                        const transcriptDiv = document.createElement('div');
-                                                        transcriptDiv.innerHTML = this.md.render(jsonResponse.transcript);
-                                                        transcriptContent.appendChild(transcriptDiv);
-                                                        
-                                                        this.addMessageActions(this.currentTranscriptMessage, jsonResponse.transcript);
-                                                        
-                                                        // Create translation message
-                                                        this.currentTranslationMessage = this.addMessage('assistant', '');
-                                                        const translationContent = this.currentTranslationMessage.querySelector('.message-content');
-                                                        const translationLabel = document.createElement('span');
-                                                        translationLabel.className = 'translation-label';
-                                                        translationLabel.textContent = `Translation (${jsonResponse.target_language})`;
-                                                        translationContent.appendChild(translationLabel);
-                                                        
-                                                        const translationDiv = document.createElement('div');
-                                                        translationDiv.innerHTML = this.md.render(jsonResponse.translation);
-                                                        translationContent.appendChild(translationDiv);
-                                                        
-                                                        this.addMessageActions(this.currentTranslationMessage, jsonResponse.translation);
-                                                        
-                                                        fullResponse = jsonResponse.translation;
-                                                        this.scrollToBottom();
+                                                    } catch (e) {
+                                                        // JSON still not complete
                                                     }
                                                 }
-                                            } catch (e) {
-                                                // JSON not complete or malformed, continue collecting
                                             }
+                                            
+                                            this.scrollToBottom();
+                                            
+                                        } catch (e) {
+                                            // Continue collecting tokens
                                         }
-                                    } else if (!isCollectingJson) {
-                                        // Regular text-only translation
-                                        fullResponse += data.token;
-                                        const textDiv = document.createElement('div');
-                                        textDiv.innerHTML = this.md.render(fullResponse);
-                                        
-                                        messageContent.innerHTML = '';
-                                        messageContent.appendChild(textDiv);
-                                        messageContent.appendChild(cursor);
-                                        this.scrollToBottom();
                                     }
                                 }
                                 
