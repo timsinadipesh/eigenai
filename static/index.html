@@ -369,13 +369,11 @@ body, #root {
   transform: translateY(-1px);
 }
 
-.delete-job {
+.edit-job, .delete-job {
   position: absolute;
   top: -8px;
-  right: -8px;
   width: 20px;
   height: 20px;
-  background: #dc3545;
   border: none;
   border-radius: 50%;
   color: white;
@@ -389,12 +387,27 @@ body, #root {
   transition: opacity 200ms ease;
 }
 
-.custom-job-button:hover .delete-job {
-  opacity: 1;
+.edit-job {
+  right: 12px;
+  background: #28a745;
+}
+
+.edit-job:hover {
+  background: #218838;
+}
+
+.delete-job {
+  right: -8px;
+  background: #dc3545;
 }
 
 .delete-job:hover {
   background: #c82333;
+}
+
+.custom-job-button:hover .edit-job,
+.custom-job-button:hover .delete-job {
+  opacity: 1;
 }
 
 /* Job Creation Modal */
@@ -587,7 +600,7 @@ body, #root {
     <div class="content-wrapper">
       <div class="header">
         <h1>frende</h1>
-        <p>private on-device ai language companion</p>
+        <p>private on-device ai companion</p>
       </div>
       
       <div class="input-section">
@@ -625,9 +638,9 @@ body, #root {
         </div>
         
         <div class="unified-buttons">
-          <button class="unified-button" id="translator-btn">Translator</button>
+          <button class="unified-button" id="translator-btn">Multimodal Interpreter</button>
+          <button class="unified-button" id="folderCruncher-btn">FolderCruncher</button>
           <button class="unified-button" id="teacher-btn">Teacher</button>
-          <button class="unified-button" id="transcriber-btn">Transcriber</button>
           <button class="unified-button" id="corrector-btn">Corrector</button>
         </div>
         
@@ -644,7 +657,7 @@ body, #root {
 <!-- Job Creation Modal -->
 <div id="jobModal" class="job-modal">
   <div class="job-modal-content">
-    <h2>Create Custom AI Job</h2>
+    <h2 id="modal-title">Create Custom AI Job</h2>
     <label for="jobName">Job Name:</label>
     <input 
       type="text" 
@@ -661,7 +674,7 @@ body, #root {
     
     <div class="job-modal-actions">
       <button class="job-modal-btn secondary" onclick="closeJobModal()">Cancel</button>
-      <button class="job-modal-btn primary" onclick="saveJob()">Create Job</button>
+      <button class="job-modal-btn primary" id="save-job-btn" onclick="saveJob()">Create Job</button>
     </div>
   </div>
 </div>
@@ -673,6 +686,7 @@ class LandingPage {
     this.isRecording = false;
     this.mediaRecorder = null;
     this.audioChunks = [];
+    this.editingJobId = null; // Track if we're editing an existing job
     
     this.initializeEventListeners();
     this.autoResizeTextarea();
@@ -689,12 +703,12 @@ class LandingPage {
       this.goToChat('translator');
     });
     
-    document.getElementById('teacher-btn').addEventListener('click', () => {
-      this.goToChat('teacher');
+    document.getElementById('folderCruncher-btn').addEventListener('click', () => {
+      this.goToChat('folderCruncher', null, 'static/fcrunch.html');
     });
     
-    document.getElementById('transcriber-btn').addEventListener('click', () => {
-      this.goToChat('transcriber');
+    document.getElementById('teacher-btn').addEventListener('click', () => {
+      this.goToChat('teacher');
     });
     
     document.getElementById('corrector-btn').addEventListener('click', () => {
@@ -757,13 +771,15 @@ class LandingPage {
     });
   }
 
-  goToChat(mode = 'general', customJob = null) {
+  goToChat(mode = 'general', customJob = null, targetUrl = null) {
     // Store any current input/attachments in sessionStorage
     const chatInput = document.getElementById('chat-input');
     const currentMessage = chatInput.value.trim();
     
     // Determine the target URL based on mode
-    const targetUrl = mode === 'translator' ? 'static/transl.html' : 'static/chat.html';
+    if (!targetUrl) {
+      targetUrl = mode === 'translator' ? 'static/transl.html' : 'static/chat.html';
+    }
     
     const chatData = {
       message: currentMessage,
@@ -908,14 +924,28 @@ class LandingPage {
   }
 
   // Custom Jobs Management
-  openJobModal() {
+  openJobModal(job = null) {
     const modal = document.getElementById('jobModal');
+    const modalTitle = document.getElementById('modal-title');
     const nameInput = document.getElementById('jobName');
     const promptInput = document.getElementById('jobPrompt');
+    const saveBtn = document.getElementById('save-job-btn');
     
-    // Clear previous inputs
-    nameInput.value = '';
-    promptInput.value = '';
+    if (job) {
+      // Editing existing job
+      this.editingJobId = job.id;
+      modalTitle.textContent = 'Edit AI Job';
+      nameInput.value = job.name;
+      promptInput.value = job.systemPrompt;
+      saveBtn.textContent = 'Update Job';
+    } else {
+      // Creating new job
+      this.editingJobId = null;
+      modalTitle.textContent = 'Create Custom AI Job';
+      nameInput.value = '';
+      promptInput.value = '';
+      saveBtn.textContent = 'Create Job';
+    }
     
     modal.classList.add('active');
     setTimeout(() => nameInput.focus(), 100);
@@ -924,6 +954,7 @@ class LandingPage {
   closeJobModal() {
     const modal = document.getElementById('jobModal');
     modal.classList.remove('active');
+    this.editingJobId = null;
   }
 
   saveJob() {
@@ -948,23 +979,43 @@ class LandingPage {
     // Get existing jobs
     const existingJobs = this.getCustomJobs();
     
-    // Check for duplicate names
-    if (existingJobs.some(job => job.name.toLowerCase() === name.toLowerCase())) {
-      alert('A job with this name already exists');
-      nameInput.focus();
-      return;
+    if (this.editingJobId) {
+      // Editing existing job
+      const jobIndex = existingJobs.findIndex(job => job.id === this.editingJobId);
+      if (jobIndex !== -1) {
+        // Check for duplicate names (excluding current job)
+        if (existingJobs.some(job => job.id !== this.editingJobId && job.name.toLowerCase() === name.toLowerCase())) {
+          alert('A job with this name already exists');
+          nameInput.focus();
+          return;
+        }
+        
+        // Update existing job
+        existingJobs[jobIndex].name = name;
+        existingJobs[jobIndex].systemPrompt = prompt;
+        existingJobs[jobIndex].updatedAt = new Date().toISOString();
+      }
+    } else {
+      // Creating new job
+      // Check for duplicate names
+      if (existingJobs.some(job => job.name.toLowerCase() === name.toLowerCase())) {
+        alert('A job with this name already exists');
+        nameInput.focus();
+        return;
+      }
+      
+      // Create new job
+      const newJob = {
+        id: Date.now().toString(),
+        name: name,
+        systemPrompt: prompt,
+        createdAt: new Date().toISOString()
+      };
+      
+      existingJobs.push(newJob);
     }
     
-    // Create new job
-    const newJob = {
-      id: Date.now().toString(),
-      name: name,
-      systemPrompt: prompt,
-      createdAt: new Date().toISOString()
-    };
-    
     // Save to localStorage
-    existingJobs.push(newJob);
     localStorage.setItem('customAIJobs', JSON.stringify(existingJobs));
     
     // Refresh the UI
@@ -1000,6 +1051,15 @@ class LandingPage {
       jobButton.className = 'custom-job-button';
       jobButton.textContent = job.name;
       
+      // Add edit button
+      const editBtn = document.createElement('button');
+      editBtn.className = 'edit-job';
+      editBtn.innerHTML = '✎';
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.editJob(job.id);
+      };
+      
       // Add delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'delete-job';
@@ -1009,6 +1069,7 @@ class LandingPage {
         this.deleteJob(job.id);
       };
       
+      jobButton.appendChild(editBtn);
       jobButton.appendChild(deleteBtn);
       
       // Add click handler for the job button
@@ -1018,6 +1079,14 @@ class LandingPage {
       
       jobsContainer.appendChild(jobButton);
     });
+  }
+
+  editJob(jobId) {
+    const jobs = this.getCustomJobs();
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      this.openJobModal(job);
+    }
   }
 
   deleteJob(jobId) {

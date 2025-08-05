@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>frende - Translator</title>
+    <title>frende - Multimodal Interpreter</title>
     <script src="./js/markdown-it.min.js"></script> 
     <script src="./js/chat-template.js"></script>
     <style>
@@ -169,9 +169,9 @@
         class TranslationChatApp extends ChatTemplate {
             constructor() {
                 super({
-                    modeText: 'TRANSLATOR',
+                    modeText: 'Multimodal Interpreter',
                     backUrl: '/',
-                    welcomeTitle: 'frende Translator',
+                    welcomeTitle: 'frende Multimodal Interpreter',
                     welcomeSubtitle: 'Translate between English, French, and German',
                     placeholder: 'Type your message in any language...',
                     maxTokens: 32768, // Maximum token length
@@ -765,6 +765,7 @@ Do not include any other text, explanations, or formatting outside of this JSON 
         document.addEventListener('DOMContentLoaded', async () => {
             translationApp = new TranslationChatApp();
             await translationApp.initialize();
+            translationApp.openTranslationSettings();
         });
     </script>
 </body>

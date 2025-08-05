@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>frende - FolderCruncher</title>
+    <script src="./js/markdown-it.min.js"></script> 
+    <script src="./js/chat-template.js"></script>
+    <style>
+        /* Settings Modal Styles */
+        .settings-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        /* Folder Upload Styles */
+        .folder-section {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 2px dashed #0066cc;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 300ms ease;
+            cursor: pointer;
+            min-height: 120px; /* Fixed height */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .folder-section:hover {
+            border-color: #0052a3;
+            background: rgba(0, 102, 204, 0.05);
+        }
+
+        .folder-section.dragover {
+            border-color: #0052a3;
+            background: rgba(0, 102, 204, 0.1);
+            transform: scale(1.02);
+        }
+
+        .folder-section.loaded {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.05);
+            cursor: default;
+        }
+
+        .folder-section.hidden {
+            display: none;
+        }
+
+        .folder-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            color: #0066cc;
+        }
+
+        .folder-section.loaded .folder-icon {
+            color: #22c55e;
+        }
+
+        .folder-text h3 {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .folder-text p {
+            margin: 0;
+            font-size: 14px;
+            color: #666666;
+            line-height: 1.4;
+        }
+
+        .folder-stats {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e5e5;
+            text-align: left;
+        }
+
+        .folder-stats.active {
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .stat-label {
+            font-weight: 600;
+            color: #0066cc;
+        }
+
+        .stat-value {
+            color: #666666;
+        }
+
+        .file-list {
+            max-height: 120px;
+            overflow-y: auto;
+            text-align: left;
+            font-size: 12px;
+            color: #666666;
+        }
+
+        .file-list div {
+            padding: 2px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .file-list div:last-child {
+            border-bottom: none;
+        }
+
+        .clear-folder {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: background 200ms ease;
+        }
+
+        .clear-folder:hover {
+            background: #c82333;
+        }
+
+        .processing-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 14px;
+            color: #0066cc;
+        }
+
+        .processing-indicator.active {
+            display: flex;
+            justify-content: center;
+        }
+
+        .processing-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e5e5e5;
+            border-top: 2px solid #0066cc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .settings-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .settings-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .settings-content h2 {
+            margin: 0 0 1rem 0;
+            font-size: 1.5rem;
+            color: #333;
+        }
+        
+        .settings-content label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .settings-content textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        
+        .settings-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            justify-content: flex-end;
+        }
+        
+        .settings-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .settings-btn.primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .settings-btn.secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .settings-btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+
+    <script>
+        // Enhanced FolderCruncher Implementation using ChatTemplate with Folder Analysis
+        class FolderCruncherApp extends ChatTemplate {
+            constructor() {
+                super({
+                    modeText: 'FOLDERCRUNCHER',
+                    backUrl: '/',
+                    welcomeTitle: 'FolderCruncher',
+                    welcomeSubtitle: 'Analyze and query your folder contents',
+                    placeholder: 'Ask questions about your folder contents...',
+                    
+                    // Enable all features for FolderCruncher
+                    enableTTS: true,
+                    enableAttachments: true,
+                    enableAudio: true,
+                    enableSettings: true,
+                    
+                    // Settings callback
+                    onSettingsClick: () => {
+                        openSettings();
+                    }
+                });
+                
+                // Store system message and custom job info
+                this.systemMessage = '';
+                this.currentCustomJob = null;
+                
+                // Folder processing state
+                this.folderContents = new Map(); // fileName -> content
+                this.folderStats = {
+                    totalFiles: 0,
+                    processedFiles: 0,
+                    supportedFiles: 0,
+                    totalSize: 0
+                };
+                this.supportedExtensions = ['.md', '.txt', '.json', '.js', '.py', '.html', '.css', '.xml', '.csv'];
+                
+                this.loadSystemMessage();
+            }
+
+            // Override initialize to inject folder section and settings modal
+            async initialize() {
+                await super.initialize();
+                this.injectFolderSection();
+                this.injectSettingsModal();
+                this.handleCustomJobSetup();
+                this.setupFolderHandlers();
+            }
+
+            // Inject folder upload section
+            injectFolderSection() {
+                const inputSection = document.querySelector('.input-section');
+                const folderHTML = `
+                    <div class="folder-section" id="folder-section">
+                        <div class="folder-icon">📁</div>
+                        <div class="folder-text">
+                            <h3>Select or Drop Folder</h3>
+                            <p>Choose a folder to analyze its contents.<br>Supports: ${this.supportedExtensions.join(', ')}</p>
+                        </div>
+                        <div class="processing-indicator" id="processing-indicator">
+                            <div class="processing-spinner"></div>
+                            <span>Processing folder contents...</span>
+                        </div>
+                        <div class="folder-stats" id="folder-stats">
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <div class="stat-label">Total Files</div>
+                                    <div class="stat-value" id="stat-total">0</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Processed</div>
+                                    <div class="stat-value" id="stat-processed">0</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Supported</div>
+                                    <div class="stat-value" id="stat-supported">0</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Total Size</div>
+                                    <div class="stat-value" id="stat-size">0 KB</div>
+                                </div>
+                            </div>
+                            <div class="file-list" id="file-list"></div>
+                            <button class="clear-folder" onclick="clearFolder()">Clear Folder</button>
+                        </div>
+                        <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
+                    </div>
+                `;
+                inputSection.insertAdjacentHTML('afterbegin', folderHTML);
+            }
+
+            // Setup folder drag and drop handlers
+            setupFolderHandlers() {
+                const folderSection = document.getElementById('folder-section');
+                const folderInput = document.getElementById('folder-input');
+
+                // Click to select folder
+                folderSection.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('clear-folder')) return;
+                    folderInput.click();
+                });
+
+                // File input change
+                folderInput.addEventListener('change', (e) => {
+                    this.handleFolderSelect(e.target.files);
+                });
+
+                // Drag and drop events
+                folderSection.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    folderSection.classList.add('dragover');
+                });
+
+                folderSection.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    folderSection.classList.remove('dragover');
+                });
+
+                folderSection.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    folderSection.classList.remove('dragover');
+                    
+                    const items = e.dataTransfer.items;
+                    const files = [];
+                    
+                    // Process dropped items
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        if (item.kind === 'file') {
+                            const entry = item.webkitGetAsEntry();
+                            if (entry && entry.isDirectory) {
+                                this.processDirectoryEntry(entry, files).then(() => {
+                                    this.handleFolderSelect(files);
+                                });
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // If no directory, handle as regular files
+                    this.handleFolderSelect(e.dataTransfer.files);
+                });
+            }
+
+            // Process directory entry recursively
+            async processDirectoryEntry(entry, files) {
+                return new Promise((resolve) => {
+                    if (entry.isDirectory) {
+                        const reader = entry.createReader();
+                        reader.readEntries(async (entries) => {
+                            for (const childEntry of entries) {
+                                await this.processDirectoryEntry(childEntry, files);
+                            }
+                            resolve();
+                        });
+                    } else {
+                        entry.file((file) => {
+                            files.push(file);
+                            resolve();
+                        });
+                    }
+                });
+            }
+
+            // Handle folder selection
+            async handleFolderSelect(files) {
+                if (!files || files.length === 0) return;
+
+                const processingIndicator = document.getElementById('processing-indicator');
+                const folderSection = document.getElementById('folder-section');
+                
+                // Show processing state
+                processingIndicator.classList.add('active');
+                
+                // Reset folder contents
+                this.folderContents.clear();
+                this.folderStats = {
+                    totalFiles: files.length,
+                    processedFiles: 0,
+                    supportedFiles: 0,
+                    totalSize: 0
+                };
+
+                // Process files
+                for (const file of files) {
+                    await this.processFile(file);
+                }
+
+                // Update UI
+                this.updateFolderStats();
+                processingIndicator.classList.remove('active');
+                folderSection.classList.add('loaded');
+                
+                // Update welcome message
+                this.updateWelcomeMessage();
+            }
+
+            // Process individual file
+            async processFile(file) {
+                const extension = '.' + file.name.split('.').pop().toLowerCase();
+                this.folderStats.totalSize += file.size;
+                
+                if (this.supportedExtensions.includes(extension)) {
+                    this.folderStats.supportedFiles++;
+                    
+                    try {
+                        const content = await this.readFileContent(file);
+                        this.folderContents.set(file.name, {
+                            content: content,
+                            size: file.size,
+                            path: file.webkitRelativePath || file.name,
+                            type: extension
+                        });
+                    } catch (error) {
+                        console.error(`Error reading file ${file.name}:`, error);
+                    }
+                }
+                
+                this.folderStats.processedFiles++;
+            }
+
+            // Read file content
+            async readFileContent(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsText(file);
+                });
+            }
+
+            // Update folder statistics display
+            updateFolderStats() {
+                const statsContainer = document.getElementById('folder-stats');
+                const statTotal = document.getElementById('stat-total');
+                const statProcessed = document.getElementById('stat-processed');
+                const statSupported = document.getElementById('stat-supported');
+                const statSize = document.getElementById('stat-size');
+                const fileList = document.getElementById('file-list');
+
+                statsContainer.classList.add('active');
+                
+                statTotal.textContent = this.folderStats.totalFiles;
+                statProcessed.textContent = this.folderStats.processedFiles;
+                statSupported.textContent = this.folderStats.supportedFiles;
+                statSize.textContent = this.formatFileSize(this.folderStats.totalSize);
+
+                // Update file list
+                fileList.innerHTML = '';
+                for (const [fileName, fileData] of this.folderContents) {
+                    const fileDiv = document.createElement('div');
+                    fileDiv.textContent = `${fileData.path} (${this.formatFileSize(fileData.size)})`;
+                    fileList.appendChild(fileDiv);
+                }
+            }
+
+            // Format file size
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+            }
+
+            // Update welcome message based on folder state
+            updateWelcomeMessage() {
+                const welcomeMessage = document.querySelector('.welcome-message');
+                if (welcomeMessage && this.folderContents.size > 0) {
+                    welcomeMessage.innerHTML = `
+                        <p>FolderCruncher Ready</p>
+                        <p>Loaded ${this.folderContents.size} files. Ask questions about your folder contents!</p>
+                    `;
+                }
+            }
+
+            // Clear folder contents
+            clearFolderContents() {
+                this.folderContents.clear();
+                this.folderStats = {
+                    totalFiles: 0,
+                    processedFiles: 0,
+                    supportedFiles: 0,
+                    totalSize: 0
+                };
+                
+                const folderSection = document.getElementById('folder-section');
+                const folderStats = document.getElementById('folder-stats');
+                const processingIndicator = document.getElementById('processing-indicator');
+                
+                folderSection.classList.remove('loaded', 'hidden');
+                folderStats.classList.remove('active');
+                processingIndicator.classList.remove('active');
+                
+                // Reset welcome message
+                const welcomeMessage = document.querySelector('.welcome-message');
+                if (welcomeMessage) {
+                    welcomeMessage.innerHTML = `
+                        <p>FolderCruncher</p>
+                        <p>Select a folder to analyze and query its contents</p>
+                    `;
+                }
+            }
+
+            // Override message processing to include folder context
+            processMessage(message) {
+                let contextualMessage = message;
+                
+                // Add folder contents as context if available
+                if (this.folderContents.size > 0) {
+                    let folderContext = "=== FOLDER CONTENTS ANALYSIS ===\n\n";
+                    
+                    // Add metadata
+                    folderContext += `Total files processed: ${this.folderContents.size}\n`;
+                    folderContext += `Total size: ${this.formatFileSize(this.folderStats.totalSize)}\n\n`;
+                    
+                    // Add each file's content
+                    for (const [fileName, fileData] of this.folderContents) {
+                        folderContext += `--- FILE: ${fileData.path} (${fileData.type}, ${this.formatFileSize(fileData.size)}) ---\n`;
+                        
+                        // Truncate very large files to prevent context overflow
+                        let content = fileData.content;
+                        if (content.length > 10000) {
+                            content = content.substring(0, 10000) + "\n... [FILE TRUNCATED - showing first 10,000 characters] ...";
+                        }
+                        
+                        folderContext += content + "\n\n";
+                    }
+                    
+                    folderContext += `=== END FOLDER CONTENTS ===\n\n`;
+                    folderContext += `USER QUERY: ${message}\n\n`;
+                    folderContext += "INSTRUCTIONS: Analyze the folder contents above and answer the user's query based SPECIFICALLY on the actual file contents provided. Reference specific files, code, or content when relevant.";
+                    
+                    contextualMessage = folderContext;
+                } else {
+                    // No folder loaded, use original message
+                    contextualMessage = message;
+                }
+                
+                // Apply system message if available
+                if (this.systemMessage.trim()) {
+                    if (this.folderContents.size > 0) {
+                        contextualMessage = `SYSTEM INSTRUCTIONS: ${this.systemMessage}\n\n${contextualMessage}`;
+                    } else if (message.trim()) {
+                        contextualMessage = `${this.systemMessage}: ${message}`;
+                    } else {
+                        contextualMessage = this.systemMessage;
+                    }
+                }
+                
+                return contextualMessage;
+            }
+
+            // Handle custom job setup from transition data
+            handleCustomJobSetup() {
+                const transitionData = sessionStorage.getItem('chatTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        
+                        if (data.customJob) {
+                            this.currentCustomJob = data.customJob;
+                            this.systemMessage = data.customJob.systemPrompt;
+                            
+                            // Update UI to reflect custom job
+                            this.updateUIForCustomJob();
+                        }
+                    } catch (error) {
+                        console.error('Error parsing transition data:', error);
+                    }
+                }
+            }
+
+            // Update UI elements for custom job
+            updateUIForCustomJob() {
+                if (!this.currentCustomJob) return;
+
+                // Update mode indicator
+                const modeIndicator = document.querySelector('#mode-indicator');
+                if (modeIndicator) {
+                    modeIndicator.textContent = this.currentCustomJob.name.toUpperCase();
+                }
+
+                // Update welcome message
+                const welcomeMessage = document.querySelector('.welcome-message');
+                if (welcomeMessage) {
+                    welcomeMessage.innerHTML = `
+                        <p>FolderCruncher with ${this.currentCustomJob.name}</p>
+                        <p>Your custom folder analysis assistant</p>
+                    `;
+                }
+
+                // Update page title
+                document.title = `frende - ${this.currentCustomJob.name}`;
+            }
+
+            // Inject settings modal into DOM
+            injectSettingsModal() {
+                const modalHTML = `
+                    <div id="settingsModal" class="settings-modal">
+                        <div class="settings-content">
+                            <h2>${this.currentCustomJob ? 'Job Settings' : 'FolderCruncher Settings'}</h2>
+                            <label for="systemMessage">
+                                ${this.currentCustomJob ? 'Job Prompt:' : 'System Message:'}
+                            </label>
+                            <textarea 
+                                id="systemMessage" 
+                                placeholder="${this.currentCustomJob ? 
+                                    'Modify the behavior of your custom AI job...' : 
+                                    'Configure how FolderCruncher should analyze and organize folders'}"
+                                ${this.currentCustomJob ? 'readonly' : ''}
+                            ></textarea>
+                            ${this.currentCustomJob ? `
+                                <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">
+                                    This is a custom AI job. The prompt is read-only. 
+                                    Go back to the home page to modify or create new jobs.
+                                </p>
+                            ` : ''}
+                            <div class="settings-actions">
+                                <button class="settings-btn secondary" onclick="closeSettings()">Cancel</button>
+                                ${!this.currentCustomJob ? 
+                                    '<button class="settings-btn primary" onclick="saveSettings()">Save</button>' : 
+                                    ''
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHTML);
+            }
+
+            // Load system message from localStorage or custom job
+            loadSystemMessage() {
+                if (this.currentCustomJob) {
+                    this.systemMessage = this.currentCustomJob.systemPrompt;
+                } else {
+                    this.systemMessage = localStorage.getItem('folderCruncherSystemMessage') || '';
+                }
+            }
+
+            // Save system message to localStorage (only for non-custom jobs)
+            saveSystemMessage() {
+                if (!this.currentCustomJob) {
+                    localStorage.setItem('folderCruncherSystemMessage', this.systemMessage);
+                }
+            }
+
+            // Override message processing to prepend system message
+            processMessage(message) {
+                if (!this.systemMessage.trim()) {
+                    return message;
+                }
+                
+                // If message has text content, prepend system message with ": "
+                if (message.trim()) {
+                    return `${this.systemMessage}: ${message}`;
+                } else {
+                    // If only non-text modalities, return system message as is
+                    return this.systemMessage;
+                }
+            }
+
+            // Override handleSubmit to use processMessage
+            async handleSubmit() {
+                if (this.isGenerating) {
+                    this.stopGeneration();
+                    return;
+                }
+                
+                const message = this.messageInput.value.trim();
+                if (!message && this.attachedFiles.size === 0) return;
+
+                // Process the message with system prompt
+                const processedMessage = this.processMessage(message);
+
+                this.isGenerating = true;
+                this.updateSendButton();
+
+                const messageAttachments = new Map(this.attachedFiles);
+                this.addMessage('user', message, messageAttachments); // Show original message to user
+                
+                this.messageInput.value = '';
+                this.autoResizeTextarea();
+                this.clearAttachments();
+                
+                // Prepare the UI for the assistant's response
+                this.currentStreamingMessage = this.addMessage('assistant', '');
+                const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                const cursor = document.createElement('span');
+                cursor.className = 'streaming-cursor';
+                messageContent.appendChild(cursor);
+
+                try {
+                    const formData = new FormData();
+                    formData.append('text', processedMessage); // Send processed message to API
+                    formData.append('max_tokens', this.config.maxTokens.toString());
+                    
+                    messageAttachments.forEach((file, name) => {
+                        if (file.type.startsWith('image/')) {
+                            formData.append('image', file);
+                        } else if (file.type.startsWith('audio/')) {
+                            formData.append('audio', file);
+                        }
+                    });
+
+                    const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
+                    
+                    // Final UI update on success
+                    cursor.remove();
+                    this.addMessageActions(this.currentStreamingMessage, fullResponse);
+
+                } catch (error) {
+                    // Check if we still have a valid streaming message before accessing it
+                    if (this.currentStreamingMessage) {
+                        const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                        if (messageContent) {
+                            cursor.remove(); // Remove cursor
+                            
+                            if (error.name === 'AbortError') {
+                                console.log('Generation stopped by user.');
+                                const stoppedDiv = document.createElement('div');
+                                stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
+                                stoppedDiv.textContent = '[Generation stopped]';
+                                messageContent.appendChild(stoppedDiv);
+                                
+                                const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
+                                if (textContent) {
+                                    this.addMessageActions(this.currentStreamingMessage, textContent);
+                                }
+                            } else {
+                                messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
+                            }
+                        }
+                    }
+                } finally {
+                    this.isGenerating = false;
+                    this.isStreaming = false;
+                    this.updateSendButton();
+                    this.abortController = null;
+                    this.currentStreamingMessage = null;
+                }
+            }
+
+            // Override handleTransitionData to properly handle custom jobs
+            handleTransitionData() {
+                const transitionData = sessionStorage.getItem('chatTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        
+                        // Handle custom job first
+                        if (data.customJob) {
+                            this.currentCustomJob = data.customJob;
+                            this.systemMessage = data.customJob.systemPrompt;
+                            this.updateUIForCustomJob();
+                        }
+                        
+                        // Handle message if present
+                        if (data.message) {
+                            this.messageInput.value = data.message;
+                            this.autoResizeTextarea();
+                        }
+                        
+                        // Handle files if present
+                        if (data.files && data.files.length > 0) {
+                            data.files.forEach(([name, fileData]) => {
+                                fetch(fileData.data)
+                                    .then(res => res.blob())
+                                    .then(blob => {
+                                        const file = new File([blob], fileData.name, { type: fileData.type });
+                                        this.attachedFiles.set(name, file);
+                                        this.renderAttachments();
+                                        this.updateSendButton();
+                                    });
+                            });
+                        }
+                        
+                        // Auto-send if from direct mode
+                        if (data.mode === 'direct' && (data.message || (data.files && data.files.length > 0))) {
+                            setTimeout(() => {
+                                if (this.messageInput.value.trim() || this.attachedFiles.size > 0) {
+                                    this.handleSubmit();
+                                }
+                            }, 500);
+                        }
+                        
+                        // Clear transition data
+                        sessionStorage.removeItem('chatTransition');
+                        
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                        sessionStorage.removeItem('chatTransition');
+                    }
+                }
+            }
+        }
+
+        let folderCruncherApp;
+
+        // Global function to clear folder (called from HTML)
+        function clearFolder() {
+            if (folderCruncherApp) {
+                folderCruncherApp.clearFolderContents();
+            }
+        }
+
+        // Settings Modal Functions
+        function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            const textarea = document.getElementById('systemMessage');
+            
+            // Load current system message
+            textarea.value = folderCruncherApp.systemMessage;
+            modal.classList.add('active');
+            
+            // Focus on textarea if not readonly
+            if (!folderCruncherApp.currentCustomJob) {
+                setTimeout(() => textarea.focus(), 100);
+            }
+        }
+
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.classList.remove('active');
+        }
+
+        function saveSettings() {
+            if (folderCruncherApp.currentCustomJob) {
+                // Don't save for custom jobs
+                closeSettings();
+                return;
+            }
+            
+            const textarea = document.getElementById('systemMessage');
+            folderCruncherApp.systemMessage = textarea.value;
+            folderCruncherApp.saveSystemMessage();
+            closeSettings();
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', (e) => {
+            const modal = document.getElementById('settingsModal');
+            if (e.target === modal) {
+                closeSettings();
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeSettings();
+            }
+        });
+
+        // Initialize the FolderCruncher app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', async () => {
+            folderCruncherApp = new FolderCruncherApp();
+            await folderCruncherApp.initialize();
+            
+            // Handle transition data from landing page if present
+            folderCruncherApp.handleTransitionData();
+        });
+    </script>
+</body>
+</html>
