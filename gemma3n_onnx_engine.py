@@ -1,5 +1,6 @@
 """
-Local ONNX Gemma 3n E2B inference engine with streaming support
+Local ONNX Gemma 3n E2B inference engine with streaming support and proper chat template handling
+FIXED: Better error handling and file processing
 """
 
 import os
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class LocalONNXGemmaEngine:
-    """Local-only ONNX Gemma 3n E2B inference engine with streaming support"""
+    """Local-only ONNX Gemma 3n E2B inference engine with streaming support and proper chat template handling"""
     
     def __init__(self, cache_dir: Optional[str] = None):
         # Local cache directory (where download.py puts files)
@@ -229,8 +230,9 @@ class LocalONNXGemmaEngine:
         max_new_tokens: int = 1000
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Advanced streaming with incremental text decoding.
+        Advanced streaming with incremental text decoding using proper Gemma 3n chat template.
         Yields new text chunks as soon as they are available.
+        FIXED: Better error handling and file processing
         """
         if not self.is_loaded:
             yield {'error': 'Models not loaded', 'finished': True}
@@ -240,17 +242,45 @@ class LocalONNXGemmaEngine:
         logger.info(f"🎯 Starting advanced streaming generation (max_tokens: {max_new_tokens})")
 
         try:
-            # No need to process audio here - just pass messages as-is to processor
-            # The processor will handle audio file loading internally
+            # CRITICAL: Normalize message format for Gemma 3n
+            # Gemma 3n expects content to ALWAYS be a list of dictionaries
+            normalized_messages = []
+            for msg in messages:
+                normalized_msg = {"role": msg["role"]}
+                
+                # Handle content formatting
+                content = msg.get("content", [])
+                if isinstance(content, str):
+                    # Convert string content to proper list format
+                    normalized_msg["content"] = [{"type": "text", "text": content}]
+                elif isinstance(content, list):
+                    # Content is already in list format, use as-is
+                    normalized_msg["content"] = content
+                else:
+                    # Fallback for unexpected format
+                    normalized_msg["content"] = [{"type": "text", "text": str(content)}]
+                
+                normalized_messages.append(normalized_msg)
             
-            # IMPORTANT: Must use return_tensors="pt" first!
-            inputs = self.processor.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                tokenize=True,
-                return_dict=True,
-                return_tensors="pt"  # PyTorch tensors required!
-            )
+            logger.info(f"📝 Processing normalized messages: {len(normalized_messages)} message(s)")
+            for i, msg in enumerate(normalized_messages):
+                content_types = [c.get('type', 'unknown') for c in msg.get('content', [])]
+                logger.info(f"   Message {i}: role={msg.get('role')}, content_types={content_types}")
+            
+            # Use processor.apply_chat_template with normalized message structure
+            # IMPORTANT: Must use return_tensors="pt" first for proper processing!
+            try:
+                inputs = self.processor.apply_chat_template(
+                    normalized_messages,
+                    add_generation_prompt=True,
+                    tokenize=True,
+                    return_dict=True,
+                    return_tensors="pt"  # PyTorch tensors required!
+                )
+            except Exception as template_error:
+                logger.error(f"Chat template processing failed: {template_error}")
+                yield {'error': f'Chat template processing failed: {template_error}', 'finished': True}
+                return
             
             # Convert to numpy for ONNX
             input_ids = inputs["input_ids"].numpy()
@@ -284,90 +314,108 @@ class LocalONNXGemmaEngine:
             audio_features = None
 
             for step in range(max_new_tokens):
-                # Get embeddings
-                inputs_embeds, per_layer_inputs = self.embed_session.run(
-                    None, {"input_ids": input_ids}
-                )
-                
-                # Process image features (once)
-                if image_features is None and pixel_values is not None:
-                    image_features = self.vision_session.run(
-                        ["image_features"],
-                        {"pixel_values": pixel_values}
-                    )[0]
-                    
-                    # Replace image tokens with image features
-                    mask = (input_ids == self.image_token_id).reshape(-1)
-                    if mask.any():
-                        flat_embeds = inputs_embeds.reshape(-1, inputs_embeds.shape[-1])
-                        flat_embeds[mask] = image_features.reshape(-1, image_features.shape[-1])
-                        inputs_embeds = flat_embeds.reshape(inputs_embeds.shape)
-                
-                # Process audio features (once)
-                if audio_features is None and input_features is not None and input_features_mask is not None:
-                    audio_features = self.audio_session.run(
-                        ["audio_features"],
-                        {
-                            "input_features": input_features,
-                            "input_features_mask": input_features_mask
-                        }
-                    )[0]
-                    
-                    # Replace audio tokens with audio features
-                    mask = (input_ids == self.audio_token_id).reshape(-1)
-                    if mask.any():
-                        flat_embeds = inputs_embeds.reshape(-1, inputs_embeds.shape[-1])
-                        flat_embeds[mask] = audio_features.reshape(-1, audio_features.shape[-1])
-                        inputs_embeds = flat_embeds.reshape(inputs_embeds.shape)
-
-                # Run decoder
-                outputs = self.decoder_session.run(None, {
-                    "inputs_embeds": inputs_embeds,
-                    "per_layer_inputs": per_layer_inputs,
-                    "position_ids": position_ids,
-                    **past_key_values
-                })
-                logits = outputs[0]
-                present_key_values = outputs[1:]
-
-                # Greedy sampling
-                next_token = np.argmax(logits[:, -1], axis=-1, keepdims=True)
-                token_id = next_token[0, 0].item()
-                all_generated_tokens.append(token_id)
-
-                # Incremental decoding
                 try:
-                    new_decoded_text = self.processor.tokenizer.decode(
-                        all_generated_tokens, 
-                        skip_special_tokens=True
+                    # Get embeddings
+                    inputs_embeds, per_layer_inputs = self.embed_session.run(
+                        None, {"input_ids": input_ids}
                     )
-                    # Only yield the new part
-                    if len(new_decoded_text) > len(decoded_text):
-                        new_part = new_decoded_text[len(decoded_text):]
-                        decoded_text = new_decoded_text
-                        if new_part:
-                            yield {
-                                'token': new_part,
-                                'finished': False,
-                                'total_tokens': len(all_generated_tokens),
-                                'step': step
-                            }
-                except Exception as decode_error:
-                    logger.warning(f"Advanced decode error at step {step}: {decode_error}")
+                    
+                    # Process image features (once)
+                    if image_features is None and pixel_values is not None:
+                        try:
+                            image_features = self.vision_session.run(
+                                ["image_features"],
+                                {"pixel_values": pixel_values}
+                            )[0]
+                            
+                            # Replace image tokens with image features
+                            mask = (input_ids == self.image_token_id).reshape(-1)
+                            if mask.any():
+                                flat_embeds = inputs_embeds.reshape(-1, inputs_embeds.shape[-1])
+                                flat_embeds[mask] = image_features.reshape(-1, image_features.shape[-1])
+                                inputs_embeds = flat_embeds.reshape(inputs_embeds.shape)
+                        except Exception as vision_error:
+                            logger.error(f"Vision processing error: {vision_error}")
+                            # Continue without image features
+                    
+                    # Process audio features (once)
+                    if audio_features is None and input_features is not None and input_features_mask is not None:
+                        try:
+                            audio_features = self.audio_session.run(
+                                ["audio_features"],
+                                {
+                                    "input_features": input_features,
+                                    "input_features_mask": input_features_mask
+                                }
+                            )[0]
+                            
+                            # Replace audio tokens with audio features
+                            mask = (input_ids == self.audio_token_id).reshape(-1)
+                            if mask.any():
+                                flat_embeds = inputs_embeds.reshape(-1, inputs_embeds.shape[-1])
+                                flat_embeds[mask] = audio_features.reshape(-1, audio_features.shape[-1])
+                                inputs_embeds = flat_embeds.reshape(inputs_embeds.shape)
+                        except Exception as audio_error:
+                            logger.error(f"Audio processing error: {audio_error}")
+                            # Continue without audio features
 
-                await asyncio.sleep(0.001)  # Optional: for UI smoothness
+                    # Run decoder
+                    outputs = self.decoder_session.run(None, {
+                        "inputs_embeds": inputs_embeds,
+                        "per_layer_inputs": per_layer_inputs,
+                        "position_ids": position_ids,
+                        **past_key_values
+                    })
+                    logits = outputs[0]
+                    present_key_values = outputs[1:]
 
-                # Prepare for next step
-                input_ids = next_token
-                attention_mask = np.ones_like(input_ids)
-                position_ids = position_ids[:, -1:] + 1
-                for i, key in enumerate(past_key_values.keys()):
-                    past_key_values[key] = present_key_values[i]
+                    # Greedy sampling
+                    next_token = np.argmax(logits[:, -1], axis=-1, keepdims=True)
+                    token_id = next_token[0, 0].item()
+                    all_generated_tokens.append(token_id)
 
-                # EOS check
-                if token_id == self.eos_token_id:
-                    logger.info(f"🏁 EOS reached at step {step}")
-                    break
+                    # Incremental decoding with better error handling
+                    try:
+                        new_decoded_text = self.processor.tokenizer.decode(
+                            all_generated_tokens, 
+                            skip_special_tokens=True
+                        )
+                        # Only yield the new part
+                        if len(new_decoded_text) > len(decoded_text):
+                            new_part = new_decoded_text[len(decoded_text):]
+                            decoded_text = new_decoded_text
+                            if new_part:
+                                yield {
+                                    'token': new_part,
+                                    'finished': False,
+                                    'total_tokens': len(all_generated_tokens),
+                                    'step': step
+                                }
+                    except Exception as decode_error:
+                        logger.warning(f"Decode error at step {step}: {decode_error}")
+                        # Continue without yielding this token
+
+                    await asyncio.sleep(0.001)  # Optional: for UI smoothness
+
+                    # Prepare for next step
+                    input_ids = next_token
+                    attention_mask = np.ones_like(input_ids)
+                    position_ids = position_ids[:, -1:] + 1
+                    for i, key in enumerate(past_key_values.keys()):
+                        past_key_values[key] = present_key_values[i]
+
+                    # EOS check
+                    if token_id == self.eos_token_id:
+                        logger.info(f"🏁 EOS reached at step {step}")
+                        break
+
+                except Exception as step_error:
+                    logger.error(f"Error at generation step {step}: {step_error}")
+                    yield {
+                        'error': f"Generation step {step} failed: {step_error}",
+                        'finished': True
+                    }
+                    return
 
             # Final signal
             yield {

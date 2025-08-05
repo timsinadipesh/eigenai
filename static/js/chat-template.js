@@ -1,5 +1,5 @@
 /**
- * ChatTemplate - Complete reusable chat interface template
+ * ChatTemplate - Complete reusable chat interface template with proper message handling
  * Provides HTML, CSS, and all functionality that can be extended for specific use cases
  */
 class ChatTemplate {
@@ -1055,7 +1055,6 @@ class ChatTemplate {
         this.isGenerating = true;
         this.updateSendButton();
 
-        const processedMessage = this.processMessage(message);
         const messageAttachments = new Map(this.attachedFiles);
         this.addMessage('user', message, messageAttachments);
         
@@ -1072,7 +1071,7 @@ class ChatTemplate {
 
         try {
             const formData = new FormData();
-            formData.append('text', processedMessage);
+            formData.append('text', message);
             formData.append('max_tokens', this.config.maxTokens.toString());
             
             messageAttachments.forEach((file, name) => {
@@ -1119,13 +1118,6 @@ class ChatTemplate {
             this.abortController = null;
             this.currentStreamingMessage = null;
         }
-    }
-
-    /**
-     * Process message before sending - override in subclasses for custom behavior
-     */
-    processMessage(message) {
-        return message; // Default: no processing
     }
 
     /**

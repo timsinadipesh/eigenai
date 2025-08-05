@@ -169,53 +169,78 @@
                 // Translation settings
                 this.language1 = 'English';
                 this.language2 = '';
-                this.systemPrompt = '';
                 this.settingsConfigured = false;
             }
 
-            // FIXED: Override message processing to properly include system prompt
-            processMessage(message) {
-                // Always use the configured system prompt if available
-                if (this.systemPrompt) {
-                    // If there is a text message, append it as the input.
-                    if (message) {
-                        return this.systemPrompt + "\n\nInput: " + message;
-                    } else {
-                        // If there is no text message (e.g., only an audio attachment),
-                        // send only the system prompt. The model will apply these instructions
-                        // to the other modalities (like audio) in the request.
-                        return this.systemPrompt;
-                    }
+            // CRITICAL FIX: Create proper message structure instead of manual prompt manipulation
+            createTranslationMessages(userMessage, userAttachments) {
+                if (!this.settingsConfigured) {
+                    throw new Error('Translation settings not configured');
                 }
 
-                // Fallback if no system prompt is set (no changes needed here)
-                return `You are a translator between ${this.language1} and ${this.language2}. Detect the input language and translate to the other language. Only output the translation: "${message}"`;
+                // Create system message with translation instructions
+                // IMPORTANT: Content must be a list of objects, not a string
+                const systemMessage = {
+                    role: "system",
+                    content: [
+                        {
+                            type: "text",
+                            text: `You are a professional translator between ${this.language1} and ${this.language2}.
+
+CRITICAL INSTRUCTIONS:
+1. For TEXT: Detect if it's ${this.language1} or ${this.language2}, then translate to the other language
+2. For AUDIO: First transcribe the speech (it will be in either ${this.language1} or ${this.language2}), then translate to the other language
+3. Always output ONLY the final translation
+4. No explanations, no source language identification, no extra text
+5. If input is ${this.language1} → translate to ${this.language2}
+6. If input is ${this.language2} → translate to ${this.language1}
+
+For audio translation, use this approach:
+1. Listen to the audio and transcribe it
+2. Identify the source language 
+3. Translate to the target language
+4. Output only the translation`
+                        }
+                    ]
+                };
+
+                // Create user message with multimodal content
+                let userContent = [];
+                
+                // Add text if present
+                if (userMessage && userMessage.trim()) {
+                    userContent.push({
+                        type: "text",
+                        text: userMessage
+                    });
+                }
+
+                // Add attachments
+                if (userAttachments && userAttachments.size > 0) {
+                    userAttachments.forEach((file, name) => {
+                        if (file.type && file.type.startsWith('image/')) {
+                            userContent.push({
+                                type: "image",
+                                image: file
+                            });
+                        } else if (file.type && file.type.startsWith('audio/')) {
+                            userContent.push({
+                                type: "audio", 
+                                audio: name  // Pass the file path/name
+                            });
+                        }
+                    });
+                }
+
+                const userMessageObj = {
+                    role: "user",
+                    content: userContent
+                };
+
+                return [systemMessage, userMessageObj];
             }
 
-            // FIXED: Generate better system prompt for translation
-            generateSystemPrompt(lang1, lang2) {
-                return `You are a professional translator specializing in ${lang1} and ${lang2}. Your task is to:
-
-        1. For TEXT input: Detect if it's in ${lang1} or ${lang2}, then translate to the other language
-        2. For AUDIO input: First transcribe the audio (it will be in either ${lang1} or ${lang2}), then translate to the other language
-        3. For any other input: Process appropriately and translate between the two languages
-
-        CRITICAL RULES:
-        - Always output ONLY the final translation
-        - No explanations, no source language labels, no extra text
-        - If input is ${lang1} → translate to ${lang2}
-        - If input is ${lang2} → translate to ${lang1}
-        - For audio: transcribe first, then translate (but only show final translation)
-
-        Examples:
-        Input (${lang1}): "Hello, how are you?"
-        Output: [translation in ${lang2}]
-
-        Input (${lang2}): [text in ${lang2}]
-        Output: [translation in ${lang1}]`;
-            }
-
-            // FIXED: Override handleSubmit to ensure system prompt is sent
+            // Override handleSubmit to use proper message structure
             async handleSubmit() {
                 if (this.isGenerating) {
                     this.stopGeneration();
@@ -234,34 +259,38 @@
                 this.isGenerating = true;
                 this.updateSendButton();
 
-                // IMPORTANT: Process message to include system prompt
-                const processedMessage = this.processMessage(message);
+                // Create proper message structure for Gemma 3n
                 const messageAttachments = new Map(this.attachedFiles);
                 
-                // Show the original user message (without system prompt)
-                this.addMessage('user', message, messageAttachments);
-                
-                this.messageInput.value = '';
-                this.autoResizeTextarea();
-                this.clearAttachments();
-                
-                // Prepare the UI for the assistant's response
-                this.currentStreamingMessage = this.addMessage('assistant', '');
-                const messageContent = this.currentStreamingMessage.querySelector('.message-content');
-                const cursor = document.createElement('span');
-                cursor.className = 'streaming-cursor';
-                messageContent.appendChild(cursor);
-
                 try {
+                    const messages = this.createTranslationMessages(message, messageAttachments);
+                    
+                    // Show the original user message (without system prompt)
+                    this.addMessage('user', message, messageAttachments);
+                    
+                    this.messageInput.value = '';
+                    this.autoResizeTextarea();
+                    this.clearAttachments();
+                    
+                    // Prepare the UI for the assistant's response
+                    this.currentStreamingMessage = this.addMessage('assistant', '');
+                    const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                    const cursor = document.createElement('span');
+                    cursor.className = 'streaming-cursor';
+                    messageContent.appendChild(cursor);
+
                     const formData = new FormData();
-                    // Send the processed message (with system prompt)
-                    formData.append('text', processedMessage);
+                    
+                    // CRITICAL: Send the properly structured messages to the backend
+                    // The backend will use processor.apply_chat_template with these messages
+                    formData.append('messages', JSON.stringify(messages));
                     formData.append('max_tokens', this.config.maxTokens.toString());
                     
+                    // Add files for backend processing
                     messageAttachments.forEach((file, name) => {
-                        if (file.type.startsWith('image/')) {
+                        if (file.type && file.type.startsWith('image/')) {
                             formData.append('image', file);
-                        } else if (file.type.startsWith('audio/')) {
+                        } else if (file.type && file.type.startsWith('audio/')) {
                             formData.append('audio', file);
                         }
                     });
@@ -277,7 +306,8 @@
                     if (this.currentStreamingMessage) {
                         const messageContent = this.currentStreamingMessage.querySelector('.message-content');
                         if (messageContent) {
-                            cursor.remove();
+                            const cursor = messageContent.querySelector('.streaming-cursor');
+                            if (cursor) cursor.remove();
                             
                             if (error.name === 'AbortError') {
                                 console.log('Generation stopped by user.');
@@ -304,7 +334,6 @@
                 }
             }
 
-            // Rest of the methods remain the same...
             showLanguageSettings() {
                 const modal = this.createLanguageModal();
                 document.body.appendChild(modal);
@@ -330,11 +359,6 @@
                             <input type="text" id="language2" class="form-input" value="${this.language2}" required>
                         </div>
                         
-                        <div class="form-group">
-                            <label class="form-label" for="system-prompt">System Prompt:</label>
-                            <textarea id="system-prompt" class="form-textarea" placeholder="System prompt will be auto-generated based on languages...">${this.systemPrompt}</textarea>
-                        </div>
-                        
                         <div class="modal-buttons">
                             <button type="button" class="modal-button secondary" id="cancel-btn">Cancel</button>
                             <button type="submit" class="modal-button primary" id="save-btn">Save Settings</button>
@@ -347,24 +371,8 @@
                 const form = modal.querySelector('#translation-form');
                 const lang1Input = modal.querySelector('#language1');
                 const lang2Input = modal.querySelector('#language2');
-                const systemPromptInput = modal.querySelector('#system-prompt');
                 const cancelBtn = modal.querySelector('#cancel-btn');
                 const saveBtn = modal.querySelector('#save-btn');
-
-                const updateSystemPrompt = () => {
-                    const l1 = lang1Input.value.trim();
-                    const l2 = lang2Input.value.trim();
-                    if (l1 && l2) {
-                        systemPromptInput.value = this.generateSystemPrompt(l1, l2);
-                    }
-                };
-
-                lang1Input.addEventListener('input', updateSystemPrompt);
-                lang2Input.addEventListener('input', updateSystemPrompt);
-
-                if (this.language1 && this.language2 && !this.systemPrompt) {
-                    updateSystemPrompt();
-                }
 
                 cancelBtn.addEventListener('click', () => {
                     if (!this.settingsConfigured) {
@@ -379,7 +387,6 @@
                     
                     const l1 = lang1Input.value.trim();
                     const l2 = lang2Input.value.trim();
-                    const prompt = systemPromptInput.value.trim();
 
                     if (!l1 || !l2) {
                         alert('Please fill in both languages');
@@ -388,7 +395,6 @@
 
                     this.language1 = l1;
                     this.language2 = l2;
-                    this.systemPrompt = prompt;
                     this.settingsConfigured = true;
 
                     this.updateWelcomeMessage();
