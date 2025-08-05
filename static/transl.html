@@ -142,10 +142,10 @@
 </head>
 <body>
     <script>
-        // Translator Implementation using ChatTemplate
+        // Translator Implementation using ChatTemplate with Gemma 3n optimized structured output
         class TranslatorApp extends ChatTemplate {
             constructor() {
-                super({
+                const config = {
                     modeText: 'TRANSLATOR',
                     backUrl: '/',
                     welcomeTitle: 'Translate with frende',
@@ -164,7 +164,12 @@
                     onSettingsClick: () => {
                         this.showLanguageSettings();
                     }
-                });
+                };
+                
+                super(config);
+                
+                // Store the endpoint directly on the instance as well
+                this.generateEndpoint = config.generateEndpoint;
 
                 // Translation settings
                 this.language1 = 'English';
@@ -172,34 +177,49 @@
                 this.settingsConfigured = false;
             }
 
-            // CRITICAL FIX: Create proper message structure instead of manual prompt manipulation
+            // GEMMA 3N OPTIMIZED: Create structured translation system prompt
             createTranslationMessages(userMessage, userAttachments) {
                 if (!this.settingsConfigured) {
                     throw new Error('Translation settings not configured');
                 }
 
-                // Create system message with translation instructions
-                // IMPORTANT: Content must be a list of objects, not a string
+                // Gemma 3n specific structured translation prompt
+                // Based on research: Gemma 3n is trained for translation tasks and supports structured output
                 const systemMessage = {
                     role: "system",
                     content: [
                         {
                             type: "text",
-                            text: `You are a professional translator between ${this.language1} and ${this.language2}.
+                            text: `You are a professional translator specializing in ${this.language1}, ${this.language2}, and German/French/English.
 
-CRITICAL INSTRUCTIONS:
-1. For TEXT: Detect if it's ${this.language1} or ${this.language2}, then translate to the other language
-2. For AUDIO: First transcribe the speech (it will be in either ${this.language1} or ${this.language2}), then translate to the other language
-3. Always output ONLY the final translation
-4. No explanations, no source language identification, no extra text
-5. If input is ${this.language1} → translate to ${this.language2}
-6. If input is ${this.language2} → translate to ${this.language1}
+CRITICAL: You must respond with a JSON object in this exact format:
 
-For audio translation, use this approach:
-1. Listen to the audio and transcribe it
-2. Identify the source language 
-3. Translate to the target language
-4. Output only the translation`
+{
+  "input_language": "[detected language: English/German/French only]",
+  "transcription": "[for audio: exact transcription of what was said]",
+  "target_language": "[target language to translate to]",
+  "translation": "[final translation result]"
+}
+
+TRANSLATION RULES:
+- If input is ${this.language1} → translate to ${this.language2}
+- If input is ${this.language2} → translate to ${this.language1}
+- For German/French/English: translate between any pair as needed
+- For AUDIO: First transcribe the speech accurately, then translate
+- For IMAGES with text: Extract and translate any visible text
+- Always output valid JSON format
+- Keep translations natural and fluent
+
+EXAMPLE:
+Input: "Hello world"
+Response: {
+  "input_language": "English",
+  "transcription": "",
+  "target_language": "German", 
+  "translation": "Hallo Welt"
+}
+
+Remember: ALWAYS respond with valid JSON only.`
                         }
                     ]
                 };
@@ -240,7 +260,184 @@ For audio translation, use this approach:
                 return [systemMessage, userMessageObj];
             }
 
-            // Override handleSubmit to use proper message structure
+            // BULLETPROOF JSON EXTRACTION: Multiple fallback methods
+            extractTranslationFromResponse(responseText) {
+                console.log("Raw response:", responseText);
+
+                // Method 1: Try clean JSON parsing
+                try {
+                    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const parsed = JSON.parse(jsonMatch);
+                        if (parsed.translation) {
+                            console.log("✅ Method 1 (Clean JSON):", parsed.translation);
+                            return {
+                                translation: parsed.translation,
+                                input_language: parsed.input_language || "Unknown",
+                                transcription: parsed.transcription || ""
+                            };
+                        }
+                    }
+                } catch (e) {
+                    console.log("Method 1 failed:", e.message);
+                }
+
+                // Method 2: Regex extraction for "translation": "..."
+                try {
+                    const translationMatch = responseText.match(/"translation":\s*"([^"]+)"/);
+                    if (translationMatch) {
+                        console.log("✅ Method 2 (Regex):", translationMatch);
+                        return {
+                            translation: translationMatch,
+                            input_language: "Unknown",
+                            transcription: ""
+                        };
+                    }
+                } catch (e) {
+                    console.log("Method 2 failed:", e.message);
+                }
+
+                // Method 3: Look for "Translation:" lines
+                try {
+                    const lines = responseText.split('\n');
+                    for (const line of lines) {
+                        const match = line.match(/translation[:\s]+(.+)/i);
+                        if (match) {
+                            const translation = match.replace(/[",]/g, '').trim();
+                            if (translation) {
+                                console.log("✅ Method 3 (Line parsing):", translation);
+                                return {
+                                    translation: translation,
+                                    input_language: "Unknown", 
+                                    transcription: ""
+                                };
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log("Method 3 failed:", e.message);
+                }
+
+                // Method 4: Take the last meaningful line as fallback
+                try {
+                    const lines = responseText.split('\n').filter(line => 
+                        line.trim() && 
+                        !line.includes('{') && 
+                        !line.includes('}') &&
+                        !line.includes('input_language') &&
+                        !line.includes('transcription') &&
+                        line.length > 3
+                    );
+                    
+                    if (lines.length > 0) {
+                        const lastLine = lines[lines.length - 1].trim().replace(/[",]/g, '');
+                        console.log("✅ Method 4 (Last line):", lastLine);
+                        return {
+                            translation: lastLine,
+                            input_language: "Unknown",
+                            transcription: ""
+                        };
+                    }
+                } catch (e) {
+                    console.log("Method 4 failed:", e.message);
+                }
+
+                // Method 5: Ultimate fallback - return the whole response cleaned up
+                const cleaned = responseText.replace(/[\{\}"]/g, '').replace(/input_language:|transcription:|target_language:|translation:/g, '').trim();
+                console.log("⚠️ Method 5 (Fallback):", cleaned);
+                return {
+                    translation: cleaned || "Translation failed",
+                    input_language: "Unknown",
+                    transcription: ""
+                };
+            }
+
+            // Override streaming to handle JSON extraction
+            async handleStreamingGeneration(formData, messageContent, cursor) {
+                let fullResponse = '';
+                let translationResult = null;
+
+                try {
+                    // Make sure to use the correct endpoint
+                    const endpoint = this.config?.generateEndpoint || '/api/generate/stream';
+                    
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        body: formData,
+                        signal: this.abortController.signal
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    
+                                    if (data.error) {
+                                        throw new Error(data.error);
+                                    }
+
+                                    if (!data.finished && data.token) {
+                                        fullResponse += data.token;
+                                        
+                                        // Try to extract translation periodically
+                                        if (fullResponse.includes('"translation"') || fullResponse.includes('translation:')) {
+                                            try {
+                                                translationResult = this.extractTranslationFromResponse(fullResponse);
+                                                if (translationResult && translationResult.translation !== "Translation failed") {
+                                                    messageContent.textContent = translationResult.translation;
+                                                    continue; // Skip the raw token display
+                                                }
+                                            } catch (e) {
+                                                // Continue with normal streaming if extraction fails
+                                            }
+                                        }
+
+                                        // Fallback: show raw streaming
+                                        messageContent.textContent = fullResponse;
+                                    }
+
+                                    if (data.finished) {
+                                        // Final extraction
+                                        translationResult = this.extractTranslationFromResponse(fullResponse);
+                                        messageContent.textContent = translationResult.translation;
+                                        return translationResult.translation;
+                                    }
+                                } catch (parseError) {
+                                    console.warn('Parse error:', parseError);
+                                }
+                            }
+                        }
+                    }
+
+                    // Final fallback if streaming ends without finished flag
+                    if (!translationResult) {
+                        translationResult = this.extractTranslationFromResponse(fullResponse);
+                        messageContent.textContent = translationResult.translation;
+                    }
+
+                    return translationResult.translation;
+
+                } catch (error) {
+                    console.error('Streaming error:', error);
+                    throw error;
+                }
+            }
+
+            // Override handleSubmit to use structured approach
             async handleSubmit() {
                 if (this.isGenerating) {
                     this.stopGeneration();
@@ -255,6 +452,9 @@ For audio translation, use this approach:
                     alert('Please configure translation languages first (click the settings button)');
                     return;
                 }
+
+                // ADD THIS LINE - Initialize abort controller
+                this.abortController = new AbortController();
 
                 this.isGenerating = true;
                 this.updateSendButton();
@@ -281,8 +481,7 @@ For audio translation, use this approach:
 
                     const formData = new FormData();
                     
-                    // CRITICAL: Send the properly structured messages to the backend
-                    // The backend will use processor.apply_chat_template with these messages
+                    // Send the properly structured messages to the backend
                     formData.append('messages', JSON.stringify(messages));
                     formData.append('max_tokens', this.config.maxTokens.toString());
                     
@@ -302,7 +501,7 @@ For audio translation, use this approach:
                     this.addMessageActions(this.currentStreamingMessage, fullResponse);
 
                 } catch (error) {
-                    // Error handling (same as parent class)
+                    // Error handling
                     if (this.currentStreamingMessage) {
                         const messageContent = this.currentStreamingMessage.querySelector('.message-content');
                         if (messageContent) {
