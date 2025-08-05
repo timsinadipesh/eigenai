@@ -7,438 +7,506 @@
     <script src="./js/markdown-it.min.js"></script> 
     <script src="./js/chat-template.js"></script>
     <style>
-        .modal-overlay {
+        /* Translation Settings Modal Styles */
+        .translation-modal {
+            display: none;
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(10px);
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
             z-index: 1000;
+        }
+        
+        .translation-modal.active {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
         }
-
-        .modal {
+        
+        .translation-content {
             background: white;
-            border-radius: 16px;
-            padding: 32px;
-            width: 100%;
-            max-width: 500px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 750px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
-
-        .modal h2 {
-            margin: 0 0 24px 0;
-            font-size: 24px;
-            font-weight: 600;
-            color: #1a1a1a;
+        
+        .translation-content h2 {
+            margin: 0 0 1.5rem 0;
+            font-size: 1.5rem;
+            color: #333;
             text-align: center;
         }
-
-        .modal-form {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+        
+        .preset-languages {
+            margin-bottom: 1.5rem;
         }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .form-label {
-            font-size: 14px;
+        
+        .preset-languages h3 {
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+            color: #555;
             font-weight: 500;
-            color: #333;
         }
-
-        .form-input {
+        
+        .preset-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 0.75rem;
+        }
+        
+        .preset-button {
             padding: 12px 16px;
-            border: 2px solid #e5e5e5;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
             border-radius: 8px;
-            font-size: 16px;
-            font-family: inherit;
-            transition: border-color 200ms ease;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #0066cc;
-        }
-
-        .form-textarea {
-            padding: 12px 16px;
-            border: 2px solid #e5e5e5;
-            border-radius: 8px;
+            cursor: pointer;
             font-size: 14px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            resize: vertical;
-            min-height: 100px;
-            transition: border-color 200ms ease;
+            text-align: center;
+            transition: all 200ms ease;
+            font-weight: 500;
         }
-
-        .form-textarea:focus {
-            outline: none;
+        
+        .preset-button:hover {
+            background: #e9ecef;
             border-color: #0066cc;
         }
-
-        .modal-buttons {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
+        
+        .preset-button.active {
+            background: #0066cc;
+            color: white;
+            border-color: #0066cc;
         }
-
-        .modal-button {
-            flex: 1;
+        
+        .current-prompt {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .current-prompt h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.9rem;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .current-prompt p {
+            margin: 0;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .translation-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+        
+        .translation-btn {
             padding: 12px 24px;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
-            font-weight: 500;
             cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
             transition: all 200ms ease;
         }
-
-        .modal-button.primary {
+        
+        .translation-btn.primary {
             background: #0066cc;
             color: white;
         }
-
-        .modal-button.primary:hover {
+        
+        .translation-btn.primary:hover {
             background: #0056b3;
         }
-
-        .modal-button.secondary {
-            background: #f5f5f5;
-            color: #333;
+        
+        .translation-btn.secondary {
+            background: #6c757d;
+            color: white;
         }
-
-        .modal-button.secondary:hover {
-            background: #e5e5e5;
+        
+        .translation-btn.secondary:hover {
+            background: #5a6268;
         }
-
-        .modal-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        
+        .transcript-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            display: block;
         }
-
-        @media (max-width: 600px) {
-            .modal {
-                padding: 24px;
-                margin: 20px;
-            }
-
-            .modal-buttons {
-                flex-direction: column;
+        
+        .translation-label {
+            font-size: 12px;
+            color: #0066cc;
+            font-weight: 500;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .translation-content {
+                padding: 1.5rem;
             }
         }
     </style>
 </head>
 <body>
+
     <script>
-        // Translator Implementation using ChatTemplate with Gemma 3n optimized structured output
-        class TranslatorApp extends ChatTemplate {
+        // Enhanced Translation Chat App extending ChatTemplate
+        class TranslationChatApp extends ChatTemplate {
             constructor() {
-                const config = {
+                super({
                     modeText: 'TRANSLATOR',
                     backUrl: '/',
-                    welcomeTitle: 'Translate with frende',
-                    welcomeSubtitle: 'Translate text between languages instantly',
-                    placeholder: 'Enter text to translate...',
+                    welcomeTitle: 'frende Translator',
+                    welcomeSubtitle: 'Translate between English, French, and German',
+                    placeholder: 'Type your message in any language...',
+                    maxTokens: 32768, // Maximum token length
                     
+                    // Enable all features for translation
                     enableTTS: true,
                     enableAttachments: true,
                     enableAudio: true,
                     enableSettings: true,
                     
-                    // Use standard generate endpoint like chat.html
-                    generateEndpoint: '/api/generate/stream',
-                    
                     // Settings callback
                     onSettingsClick: () => {
-                        this.showLanguageSettings();
+                        this.openTranslationSettings();
+                    }
+                });
+                
+                // Translation-specific settings
+                this.translationSettings = {
+                    activeLanguagePair: 'EN ↔ FR', // Default pair
+                    languagePairs: {
+                        'EN ↔ FR': { lang1: 'English', lang2: 'French' },
+                        'EN ↔ DE': { lang1: 'English', lang2: 'German' },
+                        'FR ↔ DE': { lang1: 'French', lang2: 'German' }
                     }
                 };
                 
-                super(config);
+                // Track if current message has multimedia attachments
+                this.hasMultimediaAttachments = false;
+                this.currentTranscriptMessage = null;
+                this.currentTranslationMessage = null;
                 
-                // Store the endpoint directly on the instance as well
-                this.generateEndpoint = config.generateEndpoint;
-
-                // Translation settings
-                this.language1 = 'English';
-                this.language2 = '';
-                this.settingsConfigured = false;
+                this.loadTranslationSettings();
             }
 
-            // GEMMA 3N OPTIMIZED: Create structured translation system prompt
-            createTranslationMessages(userMessage, userAttachments) {
-                if (!this.settingsConfigured) {
-                    throw new Error('Translation settings not configured');
-                }
+            // Override initialize to inject translation modal
+            async initialize() {
+                await super.initialize();
+                this.injectTranslationModal();
+                this.handleTransitionData();
+            }
 
-                // Gemma 3n specific structured translation prompt
-                // Based on research: Gemma 3n is trained for translation tasks and supports structured output
-                const systemMessage = {
-                    role: "system",
-                    content: [
-                        {
-                            type: "text",
-                            text: `You are a professional translator specializing in ${this.language1}, ${this.language2}, and German/French/English.
+            // Generate dynamic translation prompt based on selected language pair
+            generateTranslationPrompt() {
+                const pair = this.translationSettings.languagePairs[this.translationSettings.activeLanguagePair];
+                const { lang1, lang2 } = pair;
+                
+                return `You are a professional translator specializing in ${lang1} and ${lang2}. Automatically detect if the input is in ${lang1} or ${lang2}, then translate it to the other language. If the input is in ${lang1}, translate to ${lang2}. If the input is in ${lang2}, translate to ${lang1}. Provide contextually appropriate translations that maintain the intended meaning and tone. Preserve any formatting, structure, and special characters in the translation. Output ONLY the final translated text with no explanations, notes, or additional commentary.`;
+            }
 
-CRITICAL: You must respond with a JSON object in this exact format:
+            // Generate translation prompt for multimedia content
+            generateMultimediaTranslationPrompt() {
+                const pair = this.translationSettings.languagePairs[this.translationSettings.activeLanguagePair];
+                const { lang1, lang2 } = pair;
+                
+                return `You are a professional translator specializing in ${lang1} and ${lang2}. You will receive audio or image content. First transcribe the content exactly as it appears/sounds, then translate it. Automatically detect if the transcribed content is in ${lang1} or ${lang2}, then translate it to the other language. 
 
+IMPORTANT: You must output your response in the following JSON format:
 {
-  "input_language": "[detected language: English/German/French only]",
-  "transcription": "[for audio: exact transcription of what was said]",
-  "target_language": "[target language to translate to]",
-  "translation": "[final translation result]"
+    "source_language": "The detected language of the original content (${lang1} or ${lang2})",
+    "transcript": "The exact transcription of the audio or text in the image",
+    "target_language": "The target language for translation",
+    "translation": "The translation of the transcribed content"
 }
 
-TRANSLATION RULES:
-- If input is ${this.language1} → translate to ${this.language2}
-- If input is ${this.language2} → translate to ${this.language1}
-- For German/French/English: translate between any pair as needed
-- For AUDIO: First transcribe the speech accurately, then translate
-- For IMAGES with text: Extract and translate any visible text
-- Always output valid JSON format
-- Keep translations natural and fluent
+Do not include any other text, explanations, or formatting outside of this JSON structure.`;
+            }
 
-EXAMPLE:
-Input: "Hello world"
-Response: {
-  "input_language": "English",
-  "transcription": "",
-  "target_language": "German", 
-  "translation": "Hallo Welt"
-}
+            // Inject translation settings modal into DOM
+            injectTranslationModal() {
+                const modalHTML = this.getTranslationModalHTML();
+                document.body.insertAdjacentHTML('beforeend', modalHTML);
+                this.setupModalEventListeners();
+            }
 
-Remember: ALWAYS respond with valid JSON only.`
-                        }
-                    ]
-                };
+            // Get the translation modal HTML with language pairs
+            getTranslationModalHTML() {
+                return `
+                    <div id="translationModal" class="translation-modal">
+                        <div class="translation-content">                    
+                            <div class="preset-languages">
+                                <h3>Select Language Pair:</h3>
+                                <div class="preset-grid">
+                                    <button class="preset-button" data-pair="EN ↔ FR">English ↔ French</button>
+                                    <button class="preset-button" data-pair="EN ↔ DE">English ↔ German</button>
+                                    <button class="preset-button" data-pair="FR ↔ DE">French ↔ German</button>
+                                </div>
+                            </div>
+                            
+                            <div class="current-prompt">
+                                <h3>Current Translation Behavior:</h3>
+                                <p id="promptPreview"></p>
+                            </div>
+                            
+                            <div class="translation-actions">
+                                <button class="translation-btn secondary" onclick="closeTranslationSettings()">Cancel</button>
+                                <button class="translation-btn primary" onclick="saveTranslationSettings()">Save Settings</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
 
-                // Create user message with multimodal content
-                let userContent = [];
+            // Setup modal event listeners for language pairs
+            setupModalEventListeners() {
+                // Close modal when clicking outside
+                document.addEventListener('click', (e) => {
+                    const modal = document.getElementById('translationModal');
+                    if (e.target === modal) {
+                        this.closeTranslationSettings();
+                    }
+                });
+
+                // Close modal with Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeTranslationSettings();
+                    }
+                });
+            }
+
+            // Setup language pair button listeners (called when modal opens)
+            setupLanguagePairListeners() {
+                document.querySelectorAll('.preset-button').forEach(button => {
+                    button.addEventListener('click', () => {
+                        // Remove active class from all buttons
+                        document.querySelectorAll('.preset-button').forEach(btn => btn.classList.remove('active'));
+                        
+                        // Add active class to clicked button
+                        button.classList.add('active');
+                        
+                        // Update settings
+                        this.translationSettings.activeLanguagePair = button.dataset.pair;
+                        this.updatePromptPreview();
+                    });
+                });
+            }
+
+            // Update the prompt preview
+            updatePromptPreview() {
+                const prompt = this.generateTranslationPrompt();
+                const promptElement = document.getElementById('promptPreview');
+                if (promptElement) {
+                    promptElement.textContent = prompt;
+                }
+            }
+
+            // Open translation settings modal with current selection
+            openTranslationSettings() {
+                const modal = document.getElementById('translationModal');
                 
-                // Add text if present
-                if (userMessage && userMessage.trim()) {
-                    userContent.push({
-                        type: "text",
-                        text: userMessage
-                    });
-                }
-
-                // Add attachments
-                if (userAttachments && userAttachments.size > 0) {
-                    userAttachments.forEach((file, name) => {
-                        if (file.type && file.type.startsWith('image/')) {
-                            userContent.push({
-                                type: "image",
-                                image: file
-                            });
-                        } else if (file.type && file.type.startsWith('audio/')) {
-                            userContent.push({
-                                type: "audio", 
-                                audio: name  // Pass the file path/name
-                            });
-                        }
-                    });
-                }
-
-                const userMessageObj = {
-                    role: "user",
-                    content: userContent
-                };
-
-                return [systemMessage, userMessageObj];
+                // Setup button listeners each time modal opens
+                this.setupLanguagePairListeners();
+                
+                // Set active button based on current settings
+                document.querySelectorAll('.preset-button').forEach(button => {
+                    if (button.dataset.pair === this.translationSettings.activeLanguagePair) {
+                        button.classList.add('active');
+                    } else {
+                        button.classList.remove('active');
+                    }
+                });
+                
+                this.updatePromptPreview();
+                modal.classList.add('active');
             }
 
-            // BULLETPROOF JSON EXTRACTION: Multiple fallback methods
-            extractTranslationFromResponse(responseText) {
-                console.log("Raw response:", responseText);
-
-                // Method 1: Try clean JSON parsing
-                try {
-                    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        const parsed = JSON.parse(jsonMatch[0]);
-                        if (parsed.translation) {
-                            console.log("✅ Method 1 (Clean JSON):", parsed.translation);
-                            return {
-                                translation: parsed.translation,
-                                input_language: parsed.input_language || "Unknown",
-                                transcription: parsed.transcription || ""
-                            };
-                        }
-                    }
-                } catch (e) {
-                    console.log("Method 1 failed:", e.message);
-                }
-
-                // Method 2: Regex extraction for "translation": "..." - FIXED
-                try {
-                    const translationMatch = responseText.match(/"translation":\s*"([^"]+)"/);
-                    if (translationMatch) {
-                        console.log("✅ Method 2 (Regex):", translationMatch[1]);
-                        return {
-                            translation: translationMatch[1], // FIX: Use captured group, not full match
-                            input_language: "Unknown",
-                            transcription: ""
-                        };
-                    }
-                } catch (e) {
-                    console.log("Method 2 failed:", e.message);
-                }
-
-                // Method 3: Look for "Translation:" lines
-                try {
-                    const lines = responseText.split('\n');
-                    for (const line of lines) {
-                        const match = line.match(/translation[:\s]+(.+)/i);
-                        if (match) {
-                            const translation = match[1].replace(/[",]/g, '').trim();
-                            if (translation) {
-                                console.log("✅ Method 3 (Line parsing):", translation);
-                                return {
-                                    translation: translation,
-                                    input_language: "Unknown", 
-                                    transcription: ""
-                                };
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.log("Method 3 failed:", e.message);
-                }
-
-                // Method 4: Take the last meaningful line as fallback
-                try {
-                    const lines = responseText.split('\n').filter(line => 
-                        line.trim() && 
-                        !line.includes('{') && 
-                        !line.includes('}') &&
-                        !line.includes('input_language') &&
-                        !line.includes('transcription') &&
-                        line.length > 3
-                    );
-                    
-                    if (lines.length > 0) {
-                        const lastLine = lines[lines.length - 1].trim().replace(/[",]/g, '');
-                        console.log("✅ Method 4 (Last line):", lastLine);
-                        return {
-                            translation: lastLine,
-                            input_language: "Unknown",
-                            transcription: ""
-                        };
-                    }
-                } catch (e) {
-                    console.log("Method 4 failed:", e.message);
-                }
-
-                // Method 5: Ultimate fallback - return the whole response cleaned up
-                const cleaned = responseText.replace(/[\{\}"]/g, '').replace(/input_language:|transcription:|target_language:|translation:/g, '').trim();
-                console.log("⚠️ Method 5 (Fallback):", cleaned);
-                return {
-                    translation: cleaned || "Translation failed",
-                    input_language: "Unknown",
-                    transcription: ""
-                };
+            // Close translation settings modal
+            closeTranslationSettings() {
+                const modal = document.getElementById('translationModal');
+                modal.classList.remove('active');
             }
 
-            // Override streaming to handle JSON extraction - FIXED BOTH BUGS
+            // Save translation settings
+            saveTranslationSettings() {
+                // Save to localStorage
+                localStorage.setItem('translationSettings', JSON.stringify(this.translationSettings));
+                this.closeTranslationSettings();
+            }
+
+            // Load translation settings from localStorage
+            loadTranslationSettings() {
+                try {
+                    const saved = localStorage.getItem('translationSettings');
+                    if (saved) {
+                        this.translationSettings = { ...this.translationSettings, ...JSON.parse(saved) };
+                    }
+                } catch (error) {
+                    console.error('Error loading translation settings:', error);
+                }
+            }
+
+            // Override processMessage to use translation prompt
+            processMessage(message) {
+                // Check if there are multimedia attachments
+                this.hasMultimediaAttachments = false;
+                this.attachedFiles.forEach((file) => {
+                    if (file.type && (file.type.startsWith('image/') || file.type.startsWith('audio/'))) {
+                        this.hasMultimediaAttachments = true;
+                    }
+                });
+
+                // Use different prompt for multimedia vs text-only
+                const translationPrompt = this.hasMultimediaAttachments 
+                    ? this.generateMultimediaTranslationPrompt() 
+                    : this.generateTranslationPrompt();
+                
+                if (!message.trim()) {
+                    return translationPrompt;
+                }
+                
+                return `${translationPrompt}\n\nPlease translate: ${message}`;
+            }
+
+            // Override handleStreamingGeneration to handle JSON responses for multimedia
             async handleStreamingGeneration(formData, messageContent, cursor) {
+                this.abortController = new AbortController();
+                
+                const response = await fetch(this.config.generateEndpoint, {
+                    method: 'POST',
+                    body: formData,
+                    signal: this.abortController.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
                 let fullResponse = '';
-                let translationResult = null;
-                let isStreamingTranslation = false;
-                let displayedTranslation = '';
+                let jsonBuffer = '';
+                let isCollectingJson = this.hasMultimediaAttachments;
+                let jsonParsed = false;
 
-                try {
-                    const endpoint = this.config?.generateEndpoint || '/api/generate/stream';
-                    
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        body: formData,
-                        signal: this.abortController.signal
-                    });
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
 
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-
-                        const chunk = decoder.decode(value, { stream: true });
-                        const lines = chunk.split('\n');
-
-                        for (const line of lines) {
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const data = JSON.parse(line.slice(6));
-                                    
-                                    if (data.error) {
-                                        throw new Error(data.error);
-                                    }
-
-                                    if (!data.finished && data.token) {
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.error) throw new Error(data.error);
+                                
+                                if (!data.finished && data.token) {
+                                    if (isCollectingJson && !jsonParsed) {
+                                        // Collect JSON tokens
+                                        jsonBuffer += data.token;
                                         fullResponse += data.token;
                                         
-                                        // FIX BUG 1: Only start streaming after we have the opening quote of translation value
-                                        if (!isStreamingTranslation && fullResponse.includes('"translation": "')) {
-                                            isStreamingTranslation = true;
-                                            messageContent.textContent = ''; // Clear any previous content
-                                        }
-
-                                        if (isStreamingTranslation) {
-                                            // FIX BUG 1: Extract only the translation content after the opening quote
-                                            const partialMatch = fullResponse.match(/"translation"\s*:\s*"([^"]*)/);
-                                            if (partialMatch && partialMatch[1] !== displayedTranslation) {
-                                                displayedTranslation = partialMatch[1];
-                                                messageContent.textContent = displayedTranslation;
+                                        // Only try parsing when we have both opening and closing braces
+                                        if (jsonBuffer.includes('{') && jsonBuffer.includes('}')) {
+                                            try {
+                                                // Find the first complete JSON object
+                                                const startIndex = jsonBuffer.indexOf('{');
+                                                const endIndex = jsonBuffer.lastIndexOf('}');
+                                                if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                                                    const jsonStr = jsonBuffer.substring(startIndex, endIndex + 1);
+                                                    const jsonResponse = JSON.parse(jsonStr);
+                                                    
+                                                    if (jsonResponse.transcript && jsonResponse.translation) {
+                                                        jsonParsed = true;
+                                                        
+                                                        // Remove the temporary streaming message
+                                                        if (this.currentStreamingMessage && this.currentStreamingMessage.parentNode) {
+                                                            this.currentStreamingMessage.remove();
+                                                        }
+                                                        
+                                                        // Create transcript message
+                                                        this.currentTranscriptMessage = this.addMessage('assistant', '');
+                                                        const transcriptContent = this.currentTranscriptMessage.querySelector('.message-content');
+                                                        const transcriptLabel = document.createElement('span');
+                                                        transcriptLabel.className = 'transcript-label';
+                                                        transcriptLabel.textContent = `Transcript (${jsonResponse.source_language})`;
+                                                        transcriptContent.appendChild(transcriptLabel);
+                                                        
+                                                        const transcriptDiv = document.createElement('div');
+                                                        transcriptDiv.innerHTML = this.md.render(jsonResponse.transcript);
+                                                        transcriptContent.appendChild(transcriptDiv);
+                                                        
+                                                        this.addMessageActions(this.currentTranscriptMessage, jsonResponse.transcript);
+                                                        
+                                                        // Create translation message
+                                                        this.currentTranslationMessage = this.addMessage('assistant', '');
+                                                        const translationContent = this.currentTranslationMessage.querySelector('.message-content');
+                                                        const translationLabel = document.createElement('span');
+                                                        translationLabel.className = 'translation-label';
+                                                        translationLabel.textContent = `Translation (${jsonResponse.target_language})`;
+                                                        translationContent.appendChild(translationLabel);
+                                                        
+                                                        const translationDiv = document.createElement('div');
+                                                        translationDiv.innerHTML = this.md.render(jsonResponse.translation);
+                                                        translationContent.appendChild(translationDiv);
+                                                        
+                                                        this.addMessageActions(this.currentTranslationMessage, jsonResponse.translation);
+                                                        
+                                                        fullResponse = jsonResponse.translation;
+                                                        this.scrollToBottom();
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                // JSON not complete or malformed, continue collecting
                                             }
                                         }
-                                        // Don't display anything until we're actually streaming the translation
+                                    } else if (!isCollectingJson) {
+                                        // Regular text-only translation
+                                        fullResponse += data.token;
+                                        const textDiv = document.createElement('div');
+                                        textDiv.innerHTML = this.md.render(fullResponse);
+                                        
+                                        messageContent.innerHTML = '';
+                                        messageContent.appendChild(textDiv);
+                                        messageContent.appendChild(cursor);
+                                        this.scrollToBottom();
                                     }
-
-                                    if (data.finished) {
-                                        // Final full extraction
-                                        translationResult = this.extractTranslationFromResponse(fullResponse);
-                                        messageContent.textContent = translationResult.translation;
-                                        return translationResult.translation;
-                                    }
-                                } catch (parseError) {
-                                    console.warn('Parse error:', parseError);
                                 }
+                                
+                                if (data.finished) {
+                                    return fullResponse; // Return full response on success
+                                }
+                            } catch (parseError) {
+                                console.error('Failed to parse SSE data:', parseError);
                             }
                         }
                     }
-
-                    // Final fallback if streaming ends without finished flag
-                    if (!translationResult) {
-                        translationResult = this.extractTranslationFromResponse(fullResponse);
-                        messageContent.textContent = translationResult.translation;
-                    }
-
-                    return translationResult.translation;
-
-                } catch (error) {
-                    console.error('Streaming error:', error);
-                    throw error;
                 }
+                return fullResponse; // Return whatever was streamed if loop finishes unexpectedly
             }
 
-            // Override handleSubmit to use structured approach
+            // Override handleSubmit to use processMessage
             async handleSubmit() {
                 if (this.isGenerating) {
                     this.stopGeneration();
@@ -448,212 +516,200 @@ Remember: ALWAYS respond with valid JSON only.`
                 const message = this.messageInput.value.trim();
                 if (!message && this.attachedFiles.size === 0) return;
 
-                // Check if settings are configured
-                if (!this.settingsConfigured) {
-                    alert('Please configure translation languages first (click the settings button)');
-                    return;
-                }
-
-                // ADD THIS LINE - Initialize abort controller
-                this.abortController = new AbortController();
+                // Process the message with translation prompt
+                const processedMessage = this.processMessage(message);
 
                 this.isGenerating = true;
                 this.updateSendButton();
 
-                // Create proper message structure for Gemma 3n
                 const messageAttachments = new Map(this.attachedFiles);
+                this.addMessage('user', message, messageAttachments); // Show original message to user
                 
-                try {
-                    const messages = this.createTranslationMessages(message, messageAttachments);
-                    
-                    // Show the original user message (without system prompt)
-                    this.addMessage('user', message, messageAttachments);
-                    
-                    this.messageInput.value = '';
-                    this.autoResizeTextarea();
-                    this.clearAttachments();
-                    
-                    // Prepare the UI for the assistant's response
+                this.messageInput.value = '';
+                this.autoResizeTextarea();
+                this.clearAttachments();
+                
+                // For multimedia, we'll create messages during streaming
+                // For text-only, create the message now
+                if (!this.hasMultimediaAttachments) {
                     this.currentStreamingMessage = this.addMessage('assistant', '');
                     const messageContent = this.currentStreamingMessage.querySelector('.message-content');
                     const cursor = document.createElement('span');
                     cursor.className = 'streaming-cursor';
                     messageContent.appendChild(cursor);
-
-                    const formData = new FormData();
                     
-                    // Send the properly structured messages to the backend
-                    formData.append('messages', JSON.stringify(messages));
-                    formData.append('max_tokens', this.config.maxTokens.toString());
-                    
-                    // Add files for backend processing
-                    messageAttachments.forEach((file, name) => {
-                        if (file.type && file.type.startsWith('image/')) {
-                            formData.append('image', file);
-                        } else if (file.type && file.type.startsWith('audio/')) {
-                            formData.append('audio', file);
-                        }
-                    });
+                    try {
+                        const formData = new FormData();
+                        formData.append('text', processedMessage); // Send processed message to API
+                        formData.append('max_tokens', this.config.maxTokens.toString());
+                        
+                        messageAttachments.forEach((file, name) => {
+                            if (file.type.startsWith('image/')) {
+                                formData.append('image', file);
+                            } else if (file.type.startsWith('audio/')) {
+                                formData.append('audio', file);
+                            }
+                        });
 
-                    const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
-                    
-                    // Final UI update on success
-                    cursor.remove();
-                    this.addMessageActions(this.currentStreamingMessage, fullResponse);
+                        const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
+                        
+                        // Final UI update on success
+                        cursor.remove();
+                        this.addMessageActions(this.currentStreamingMessage, fullResponse);
 
-                } catch (error) {
-                    // Error handling
-                    if (this.currentStreamingMessage) {
-                        const messageContent = this.currentStreamingMessage.querySelector('.message-content');
-                        if (messageContent) {
-                            const cursor = messageContent.querySelector('.streaming-cursor');
-                            if (cursor) cursor.remove();
-                            
-                            if (error.name === 'AbortError') {
-                                console.log('Generation stopped by user.');
-                                const stoppedDiv = document.createElement('div');
-                                stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
-                                stoppedDiv.textContent = '[Generation stopped]';
-                                messageContent.appendChild(stoppedDiv);
+                    } catch (error) {
+                        // Check if we still have a valid streaming message before accessing it
+                        if (this.currentStreamingMessage) {
+                            const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                            if (messageContent) {
+                                cursor.remove(); // Remove cursor
                                 
-                                const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
-                                if (textContent) {
-                                    this.addMessageActions(this.currentStreamingMessage, textContent);
+                                if (error.name === 'AbortError') {
+                                    console.log('Generation stopped by user.');
+                                    const stoppedDiv = document.createElement('div');
+                                    stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
+                                    stoppedDiv.textContent = '[Generation stopped]';
+                                    messageContent.appendChild(stoppedDiv);
+                                    
+                                    const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
+                                    if (textContent) {
+                                        this.addMessageActions(this.currentStreamingMessage, textContent);
+                                    }
+                                } else {
+                                    messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
                                 }
-                            } else {
-                                messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
                             }
                         }
+                    } finally {
+                        this.isGenerating = false;
+                        this.isStreaming = false;
+                        this.updateSendButton();
+                        this.abortController = null;
+                        this.currentStreamingMessage = null;
+                        this.hasMultimediaAttachments = false; // Reset the flag
                     }
-                } finally {
-                    this.isGenerating = false;
-                    this.isStreaming = false;
-                    this.updateSendButton();
-                    this.abortController = null;
-                    this.currentStreamingMessage = null;
-                }
-            }
-
-            showLanguageSettings() {
-                const modal = this.createLanguageModal();
-                document.body.appendChild(modal);
-            }
-
-            createLanguageModal() {
-                const overlay = document.createElement('div');
-                overlay.className = 'modal-overlay';
-
-                const modal = document.createElement('div');
-                modal.className = 'modal';
-
-                modal.innerHTML = `
-                    <h2>Translation Settings</h2>
-                    <form class="modal-form" id="translation-form">
-                        <div class="form-group">
-                            <label class="form-label" for="language1">Language 1:</label>
-                            <input type="text" id="language1" class="form-input" value="${this.language1}" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="language2">Language 2:</label>
-                            <input type="text" id="language2" class="form-input" value="${this.language2}" required>
-                        </div>
-                        
-                        <div class="modal-buttons">
-                            <button type="button" class="modal-button secondary" id="cancel-btn">Cancel</button>
-                            <button type="submit" class="modal-button primary" id="save-btn">Save Settings</button>
-                        </div>
-                    </form>
-                `;
-
-                overlay.appendChild(modal);
-
-                const form = modal.querySelector('#translation-form');
-                const lang1Input = modal.querySelector('#language1');
-                const lang2Input = modal.querySelector('#language2');
-                const cancelBtn = modal.querySelector('#cancel-btn');
-                const saveBtn = modal.querySelector('#save-btn');
-
-                cancelBtn.addEventListener('click', () => {
-                    if (!this.settingsConfigured) {
-                        window.location.href = '/';
-                    } else {
-                        overlay.remove();
-                    }
-                });
-
-                form.addEventListener('submit', (e) => {
-                    e.preventDefault();
+                } else {
+                    // For multimedia, create a temporary message with cursor
+                    this.currentStreamingMessage = this.addMessage('assistant', '');
+                    const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                    const cursor = document.createElement('span');
+                    cursor.className = 'streaming-cursor';
+                    messageContent.appendChild(cursor);
                     
-                    const l1 = lang1Input.value.trim();
-                    const l2 = lang2Input.value.trim();
+                    try {
+                        const formData = new FormData();
+                        formData.append('text', processedMessage); // Send processed message to API
+                        formData.append('max_tokens', this.config.maxTokens.toString());
+                        
+                        messageAttachments.forEach((file, name) => {
+                            if (file.type.startsWith('image/')) {
+                                formData.append('image', file);
+                            } else if (file.type.startsWith('audio/')) {
+                                formData.append('audio', file);
+                            }
+                        });
 
-                    if (!l1 || !l2) {
-                        alert('Please fill in both languages');
-                        return;
-                    }
-
-                    this.language1 = l1;
-                    this.language2 = l2;
-                    this.settingsConfigured = true;
-
-                    this.updateWelcomeMessage();
-                    overlay.remove();
-                });
-
-                overlay.addEventListener('click', (e) => {
-                    if (e.target === overlay) {
-                        if (!this.settingsConfigured) {
-                            window.location.href = '/';
-                        } else {
-                            overlay.remove();
+                        const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
+                        
+                        // Remove the temporary message since we created separate transcript and translation messages
+                        if (this.currentStreamingMessage && this.currentStreamingMessage.parentNode) {
+                            this.currentStreamingMessage.remove();
                         }
+
+                    } catch (error) {
+                        // Handle errors for multimedia
+                        if (this.currentStreamingMessage) {
+                            const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                            if (messageContent) {
+                                cursor.remove(); // Remove cursor
+                                
+                                if (error.name === 'AbortError') {
+                                    console.log('Generation stopped by user.');
+                                    messageContent.innerHTML = '<div style="color: #666; font-style: italic;">[Generation stopped]</div>';
+                                } else {
+                                    messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
+                                }
+                            }
+                        }
+                    } finally {
+                        this.isGenerating = false;
+                        this.isStreaming = false;
+                        this.updateSendButton();
+                        this.abortController = null;
+                        this.currentStreamingMessage = null;
+                        this.currentTranscriptMessage = null;
+                        this.currentTranslationMessage = null;
+                        this.hasMultimediaAttachments = false; // Reset the flag
                     }
-                });
-
-                return overlay;
-            }
-
-            updateWelcomeMessage() {
-                const welcomeMsg = this.chatHistory.querySelector('.welcome-message');
-                if (welcomeMsg && this.language1 && this.language2) {
-                    welcomeMsg.innerHTML = `
-                        <p>Translate with frende</p>
-                        <p>Translating between ${this.language1} and ${this.language2}</p>
-                    `;
                 }
             }
 
-            async initialize() {
-                await super.initialize();
-
+            // Handle transition data from landing page
+            handleTransitionData() {
                 const transitionData = sessionStorage.getItem('chatTransition');
-                let hasTransitionData = false;
-
                 if (transitionData) {
                     try {
                         const data = JSON.parse(transitionData);
-                        hasTransitionData = data.message || (data.files && data.files.length > 0);
+                        
+                        // Handle message if present
+                        if (data.message) {
+                            this.messageInput.value = data.message;
+                            this.autoResizeTextarea();
+                        }
+                        
+                        // Handle files if present
+                        if (data.files && data.files.length > 0) {
+                            data.files.forEach(([name, fileData]) => {
+                                fetch(fileData.data)
+                                    .then(res => res.blob())
+                                    .then(blob => {
+                                        const file = new File([blob], fileData.name, { type: fileData.type });
+                                        this.attachedFiles.set(name, file);
+                                        this.renderAttachments();
+                                        this.updateSendButton();
+                                    });
+                            });
+                        }
+                        
+                        // Auto-send if from direct mode
+                        if (data.mode === 'direct' && (data.message || (data.files && data.files.length > 0))) {
+                            setTimeout(() => {
+                                if (this.messageInput.value.trim() || this.attachedFiles.size > 0) {
+                                    this.handleSubmit();
+                                }
+                            }, 500);
+                        }
+                        
+                        // Clear transition data
+                        sessionStorage.removeItem('chatTransition');
+                        
                     } catch (e) {
-                        // Ignore parsing errors
+                        console.error('Error parsing transition data:', e);
+                        sessionStorage.removeItem('chatTransition');
                     }
-                }
-
-                if (!hasTransitionData) {
-                    setTimeout(() => {
-                        this.showLanguageSettings();
-                    }, 500);
                 }
             }
         }
 
-        // Initialize the translator app when DOM is loaded
+        let translationApp;
+
+        // Global functions for modal
+        function closeTranslationSettings() {
+            if (translationApp) {
+                translationApp.closeTranslationSettings();
+            }
+        }
+
+        function saveTranslationSettings() {
+            if (translationApp) {
+                translationApp.saveTranslationSettings();
+            }
+        }
+
+        // Initialize the translation app when DOM is loaded
         document.addEventListener('DOMContentLoaded', async () => {
-            const app = new TranslatorApp();
-            await app.initialize();
-            
-            // Handle transition data from landing page if present
-            app.handleTransitionData();
+            translationApp = new TranslationChatApp();
+            await translationApp.initialize();
         });
     </script>
 </body>
