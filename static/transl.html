@@ -268,7 +268,7 @@ Remember: ALWAYS respond with valid JSON only.`
                 try {
                     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
-                        const parsed = JSON.parse(jsonMatch);
+                        const parsed = JSON.parse(jsonMatch[0]);
                         if (parsed.translation) {
                             console.log("✅ Method 1 (Clean JSON):", parsed.translation);
                             return {
@@ -282,13 +282,13 @@ Remember: ALWAYS respond with valid JSON only.`
                     console.log("Method 1 failed:", e.message);
                 }
 
-                // Method 2: Regex extraction for "translation": "..."
+                // Method 2: Regex extraction for "translation": "..." - FIXED
                 try {
                     const translationMatch = responseText.match(/"translation":\s*"([^"]+)"/);
                     if (translationMatch) {
-                        console.log("✅ Method 2 (Regex):", translationMatch);
+                        console.log("✅ Method 2 (Regex):", translationMatch[1]);
                         return {
-                            translation: translationMatch,
+                            translation: translationMatch[1], // FIX: Use captured group, not full match
                             input_language: "Unknown",
                             transcription: ""
                         };
@@ -303,7 +303,7 @@ Remember: ALWAYS respond with valid JSON only.`
                     for (const line of lines) {
                         const match = line.match(/translation[:\s]+(.+)/i);
                         if (match) {
-                            const translation = match.replace(/[",]/g, '').trim();
+                            const translation = match[1].replace(/[",]/g, '').trim();
                             if (translation) {
                                 console.log("✅ Method 3 (Line parsing):", translation);
                                 return {
@@ -352,13 +352,14 @@ Remember: ALWAYS respond with valid JSON only.`
                 };
             }
 
-            // Override streaming to handle JSON extraction
+            // Override streaming to handle JSON extraction - FIXED BOTH BUGS
             async handleStreamingGeneration(formData, messageContent, cursor) {
                 let fullResponse = '';
                 let translationResult = null;
+                let isStreamingTranslation = false;
+                let displayedTranslation = '';
 
                 try {
-                    // Make sure to use the correct endpoint
                     const endpoint = this.config?.generateEndpoint || '/api/generate/stream';
                     
                     const response = await fetch(endpoint, {
@@ -393,25 +394,25 @@ Remember: ALWAYS respond with valid JSON only.`
                                     if (!data.finished && data.token) {
                                         fullResponse += data.token;
                                         
-                                        // Try to extract translation periodically
-                                        if (fullResponse.includes('"translation"') || fullResponse.includes('translation:')) {
-                                            try {
-                                                translationResult = this.extractTranslationFromResponse(fullResponse);
-                                                if (translationResult && translationResult.translation !== "Translation failed") {
-                                                    messageContent.textContent = translationResult.translation;
-                                                    continue; // Skip the raw token display
-                                                }
-                                            } catch (e) {
-                                                // Continue with normal streaming if extraction fails
-                                            }
+                                        // FIX BUG 1: Only start streaming after we have the opening quote of translation value
+                                        if (!isStreamingTranslation && fullResponse.includes('"translation": "')) {
+                                            isStreamingTranslation = true;
+                                            messageContent.textContent = ''; // Clear any previous content
                                         }
 
-                                        // Fallback: show raw streaming
-                                        messageContent.textContent = fullResponse;
+                                        if (isStreamingTranslation) {
+                                            // FIX BUG 1: Extract only the translation content after the opening quote
+                                            const partialMatch = fullResponse.match(/"translation"\s*:\s*"([^"]*)/);
+                                            if (partialMatch && partialMatch[1] !== displayedTranslation) {
+                                                displayedTranslation = partialMatch[1];
+                                                messageContent.textContent = displayedTranslation;
+                                            }
+                                        }
+                                        // Don't display anything until we're actually streaming the translation
                                     }
 
                                     if (data.finished) {
-                                        // Final extraction
+                                        // Final full extraction
                                         translationResult = this.extractTranslationFromResponse(fullResponse);
                                         messageContent.textContent = translationResult.translation;
                                         return translationResult.translation;
