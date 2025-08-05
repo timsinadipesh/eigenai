@@ -91,9 +91,8 @@
 </head>
 <body>
 
-
     <script>
-        // Simple Chat Implementation using ChatTemplate
+        // Enhanced Chat Implementation using ChatTemplate with Custom Jobs Support
         class SimpleChatApp extends ChatTemplate {
             constructor() {
                 super({
@@ -115,15 +114,60 @@
                     }
                 });
                 
-                // Store system message
+                // Store system message and custom job info
                 this.systemMessage = '';
+                this.currentCustomJob = null;
                 this.loadSystemMessage();
             }
 
-            // Override initialize to inject settings modal after ChatTemplate initialization
+            // Override initialize to inject settings modal and handle custom jobs
             async initialize() {
                 await super.initialize();
                 this.injectSettingsModal();
+                this.handleCustomJobSetup();
+            }
+
+            // Handle custom job setup from transition data
+            handleCustomJobSetup() {
+                const transitionData = sessionStorage.getItem('chatTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        
+                        if (data.customJob) {
+                            this.currentCustomJob = data.customJob;
+                            this.systemMessage = data.customJob.systemPrompt;
+                            
+                            // Update UI to reflect custom job
+                            this.updateUIForCustomJob();
+                        }
+                    } catch (error) {
+                        console.error('Error parsing transition data:', error);
+                    }
+                }
+            }
+
+            // Update UI elements for custom job
+            updateUIForCustomJob() {
+                if (!this.currentCustomJob) return;
+
+                // Update mode indicator
+                const modeIndicator = document.querySelector('#mode-indicator');
+                if (modeIndicator) {
+                    modeIndicator.textContent = this.currentCustomJob.name.toUpperCase();
+                }
+
+                // Update welcome message
+                const welcomeMessage = document.querySelector('.welcome-message');
+                if (welcomeMessage) {
+                    welcomeMessage.innerHTML = `
+                        <p>Chat with ${this.currentCustomJob.name}</p>
+                        <p>Your custom AI assistant</p>
+                    `;
+                }
+
+                // Update page title
+                document.title = `frende - ${this.currentCustomJob.name}`;
             }
 
             // Inject settings modal into DOM
@@ -131,14 +175,29 @@
                 const modalHTML = `
                     <div id="settingsModal" class="settings-modal">
                         <div class="settings-content">
-                            <label for="systemMessage">System Message:</label>
+                            <h2>${this.currentCustomJob ? 'Job Settings' : 'System Message'}</h2>
+                            <label for="systemMessage">
+                                ${this.currentCustomJob ? 'Job Prompt:' : 'System Message:'}
+                            </label>
                             <textarea 
                                 id="systemMessage" 
-                                placeholder="Enter system message for frende to follow"
+                                placeholder="${this.currentCustomJob ? 
+                                    'Modify the behavior of your custom AI job...' : 
+                                    'Enter system message for frende to follow'}"
+                                ${this.currentCustomJob ? 'readonly' : ''}
                             ></textarea>
+                            ${this.currentCustomJob ? `
+                                <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">
+                                    This is a custom AI job. The prompt is read-only. 
+                                    Go back to the home page to modify or create new jobs.
+                                </p>
+                            ` : ''}
                             <div class="settings-actions">
                                 <button class="settings-btn secondary" onclick="closeSettings()">Cancel</button>
-                                <button class="settings-btn primary" onclick="saveSettings()">Save</button>
+                                ${!this.currentCustomJob ? 
+                                    '<button class="settings-btn primary" onclick="saveSettings()">Save</button>' : 
+                                    ''
+                                }
                             </div>
                         </div>
                     </div>
@@ -146,14 +205,20 @@
                 document.body.insertAdjacentHTML('beforeend', modalHTML);
             }
 
-            // Load system message from localStorage
+            // Load system message from localStorage or custom job
             loadSystemMessage() {
-                this.systemMessage = localStorage.getItem('systemMessage') || '';
+                if (this.currentCustomJob) {
+                    this.systemMessage = this.currentCustomJob.systemPrompt;
+                } else {
+                    this.systemMessage = localStorage.getItem('systemMessage') || '';
+                }
             }
 
-            // Save system message to localStorage
+            // Save system message to localStorage (only for non-custom jobs)
             saveSystemMessage() {
-                localStorage.setItem('systemMessage', this.systemMessage);
+                if (!this.currentCustomJob) {
+                    localStorage.setItem('systemMessage', this.systemMessage);
+                }
             }
 
             // Override message processing to prepend system message
@@ -170,6 +235,140 @@
                     return this.systemMessage;
                 }
             }
+
+            // Override handleSubmit to use processMessage
+            async handleSubmit() {
+                if (this.isGenerating) {
+                    this.stopGeneration();
+                    return;
+                }
+                
+                const message = this.messageInput.value.trim();
+                if (!message && this.attachedFiles.size === 0) return;
+
+                // Process the message with system prompt
+                const processedMessage = this.processMessage(message);
+
+                this.isGenerating = true;
+                this.updateSendButton();
+
+                const messageAttachments = new Map(this.attachedFiles);
+                this.addMessage('user', message, messageAttachments); // Show original message to user
+                
+                this.messageInput.value = '';
+                this.autoResizeTextarea();
+                this.clearAttachments();
+                
+                // Prepare the UI for the assistant's response
+                this.currentStreamingMessage = this.addMessage('assistant', '');
+                const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                const cursor = document.createElement('span');
+                cursor.className = 'streaming-cursor';
+                messageContent.appendChild(cursor);
+
+                try {
+                    const formData = new FormData();
+                    formData.append('text', processedMessage); // Send processed message to API
+                    formData.append('max_tokens', this.config.maxTokens.toString());
+                    
+                    messageAttachments.forEach((file, name) => {
+                        if (file.type.startsWith('image/')) {
+                            formData.append('image', file);
+                        } else if (file.type.startsWith('audio/')) {
+                            formData.append('audio', file);
+                        }
+                    });
+
+                    const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
+                    
+                    // Final UI update on success
+                    cursor.remove();
+                    this.addMessageActions(this.currentStreamingMessage, fullResponse);
+
+                } catch (error) {
+                    // Check if we still have a valid streaming message before accessing it
+                    if (this.currentStreamingMessage) {
+                        const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                        if (messageContent) {
+                            cursor.remove(); // Remove cursor
+                            
+                            if (error.name === 'AbortError') {
+                                console.log('Generation stopped by user.');
+                                const stoppedDiv = document.createElement('div');
+                                stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
+                                stoppedDiv.textContent = '[Generation stopped]';
+                                messageContent.appendChild(stoppedDiv);
+                                
+                                const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
+                                if (textContent) {
+                                    this.addMessageActions(this.currentStreamingMessage, textContent);
+                                }
+                            } else {
+                                messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
+                            }
+                        }
+                    }
+                } finally {
+                    this.isGenerating = false;
+                    this.isStreaming = false;
+                    this.updateSendButton();
+                    this.abortController = null;
+                    this.currentStreamingMessage = null;
+                }
+            }
+
+            // Override handleTransitionData to properly handle custom jobs
+            handleTransitionData() {
+                const transitionData = sessionStorage.getItem('chatTransition');
+                if (transitionData) {
+                    try {
+                        const data = JSON.parse(transitionData);
+                        
+                        // Handle custom job first
+                        if (data.customJob) {
+                            this.currentCustomJob = data.customJob;
+                            this.systemMessage = data.customJob.systemPrompt;
+                            this.updateUIForCustomJob();
+                        }
+                        
+                        // Handle message if present
+                        if (data.message) {
+                            this.messageInput.value = data.message;
+                            this.autoResizeTextarea();
+                        }
+                        
+                        // Handle files if present
+                        if (data.files && data.files.length > 0) {
+                            data.files.forEach(([name, fileData]) => {
+                                fetch(fileData.data)
+                                    .then(res => res.blob())
+                                    .then(blob => {
+                                        const file = new File([blob], fileData.name, { type: fileData.type });
+                                        this.attachedFiles.set(name, file);
+                                        this.renderAttachments();
+                                        this.updateSendButton();
+                                    });
+                            });
+                        }
+                        
+                        // Auto-send if from direct mode
+                        if (data.mode === 'direct' && (data.message || (data.files && data.files.length > 0))) {
+                            setTimeout(() => {
+                                if (this.messageInput.value.trim() || this.attachedFiles.size > 0) {
+                                    this.handleSubmit();
+                                }
+                            }, 500);
+                        }
+                        
+                        // Clear transition data
+                        sessionStorage.removeItem('chatTransition');
+                        
+                    } catch (e) {
+                        console.error('Error parsing transition data:', e);
+                        sessionStorage.removeItem('chatTransition');
+                    }
+                }
+            }
         }
 
         let chatApp;
@@ -183,8 +382,10 @@
             textarea.value = chatApp.systemMessage;
             modal.classList.add('active');
             
-            // Focus on textarea
-            setTimeout(() => textarea.focus(), 100);
+            // Focus on textarea if not readonly
+            if (!chatApp.currentCustomJob) {
+                setTimeout(() => textarea.focus(), 100);
+            }
         }
 
         function closeSettings() {
@@ -193,6 +394,12 @@
         }
 
         function saveSettings() {
+            if (chatApp.currentCustomJob) {
+                // Don't save for custom jobs
+                closeSettings();
+                return;
+            }
+            
             const textarea = document.getElementById('systemMessage');
             chatApp.systemMessage = textarea.value;
             chatApp.saveSystemMessage();
