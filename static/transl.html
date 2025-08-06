@@ -154,6 +154,44 @@
             margin-bottom: 8px;
             display: block;
         }
+
+        /* Voice mode button positioned above input field */
+        .voice-mode-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .voice-mode-button {
+            border: none;
+            background: #f8f9fa;
+            cursor: pointer;
+            font-size: 24px;
+            padding: 12px 16px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            border: 2px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .voice-mode-button:hover {
+            background-color: #e9ecef;
+            border-color: #0066cc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .voice-mode-button.recording {
+            background-color: #ffebee;
+            border-color: #f44336;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
         
         @media (max-width: 768px) {
             .translation-content {
@@ -171,8 +209,8 @@
                 super({
                     modeText: 'Multimodal Interpreter',
                     backUrl: '/',
-                    welcomeTitle: 'frende Multimodal Interpreter',
-                    welcomeSubtitle: 'Translate between English, French, and German',
+                    welcomeTitle: 'Multimodal Interpreter',
+                    welcomeSubtitle: 'let there be no language barrier',
                     placeholder: 'Type your message in any language...',
                     maxTokens: 32768, // Maximum token length
                     
@@ -202,15 +240,172 @@
                 this.hasMultimediaAttachments = false;
                 this.currentTranscriptMessage = null;
                 this.currentTranslationMessage = null;
+
+                // Voice mode properties
+                this.voiceMode = false;
+                this.isRecording = false;
+                this.recorder = null;
+                this.audioChunks = [];
+                this.currentAudioBlob = null;
+                this.voiceButton = null;
+                this.lastTargetLanguage = null;
+                this.languageCodes = {
+                    'English': 'en-US',
+                    'French': 'fr-FR',
+                    'German': 'de-DE'
+                };
                 
                 this.loadTranslationSettings();
             }
 
-            // Override initialize to inject translation modal
+            // Override initialize to inject translation modal and voice button
             async initialize() {
                 await super.initialize();
                 this.injectTranslationModal();
                 this.handleTransitionData();
+                this.setupVoiceButton();
+                this.setupVoiceKeyListeners();
+            }
+
+            // Setup voice mode button positioned above input field
+            setupVoiceButton() {
+                // Create container for the voice button
+                const voiceContainer = document.createElement('div');
+                voiceContainer.className = 'voice-mode-container';
+                
+                // Create the voice button
+                this.voiceButton = document.createElement('button');
+                this.voiceButton.innerHTML = '🎤';
+                this.voiceButton.title = 'Toggle Voice Mode';
+                this.voiceButton.className = 'voice-mode-button';
+                this.voiceButton.onclick = () => this.toggleVoiceMode();
+                
+                // Add button to container
+                voiceContainer.appendChild(this.voiceButton);
+                
+                // Find the input container and insert the voice container above it
+                const inputContainer = this.messageInput.parentNode;
+                inputContainer.parentNode.insertBefore(voiceContainer, inputContainer);
+            }
+
+            // Setup key listeners for space/pause in voice mode
+            setupVoiceKeyListeners() {
+                document.addEventListener('keydown', (e) => {
+                    if (this.voiceMode && !this.isGenerating) {
+                        if (e.code === 'Space' || e.code === 'Pause') {
+                            e.preventDefault();
+                            if (this.isRecording) {
+                                this.stopRecording(true);
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Toggle voice mode
+            async toggleVoiceMode() {
+                this.voiceMode = !this.voiceMode;
+                
+                if (this.voiceMode) {
+                    this.voiceButton.innerHTML = '❌';
+                    this.voiceButton.title = 'Exit Voice Mode';
+                    this.messageInput.disabled = true;
+                    this.messageInput.placeholder = 'Voice mode active - Press Space to stop recording';
+                    await this.startRecording();
+                } else {
+                    this.voiceButton.innerHTML = '🎤';
+                    this.voiceButton.title = 'Toggle Voice Mode';
+                    this.voiceButton.classList.remove('recording');
+                    this.stopRecording(false);
+                    this.messageInput.disabled = false;
+                    this.messageInput.placeholder = 'Type your message in any language...';
+                }
+            }
+
+            // Start audio recording
+            async startRecording() {
+                if (this.isRecording) return;
+                
+                try {
+                    this.audioChunks = [];
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    this.recorder = new MediaRecorder(stream);
+                    this.recorder.ondataavailable = (e) => {
+                        this.audioChunks.push(e.data);
+                    };
+                    
+                    this.recorder.onstop = () => {
+                        if (this.audioChunks.length > 0) {
+                            this.currentAudioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                        }
+                        
+                        // Stop all tracks to free up microphone
+                        stream.getTracks().forEach(track => track.stop());
+                        
+                        this.recorder = null;
+                        this.isRecording = false;
+                        this.voiceButton.classList.remove('recording');
+                    };
+                    
+                    this.recorder.start();
+                    this.isRecording = true;
+                    this.voiceButton.classList.add('recording');
+                    
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    alert('Could not access microphone. Please check permissions.');
+                }
+            }
+
+            // Stop audio recording
+            stopRecording(send = true) {
+                if (!this.isRecording || !this.recorder) return;
+                
+                this.recorder.stop();
+                
+                if (send) {
+                    this.recorder.addEventListener('stop', async () => {
+                        if (this.currentAudioBlob) {
+                            await this.sendAudio();
+                        }
+                        this.currentAudioBlob = null;
+                        this.audioChunks = [];
+                    }, { once: true });
+                }
+            }
+
+            // Send recorded audio
+            async sendAudio() {
+                if (!this.currentAudioBlob) return;
+                
+                const file = new File([this.currentAudioBlob], 'voice.webm', { type: 'audio/webm' });
+                this.attachedFiles.clear(); // Clear any existing attachments
+                this.attachedFiles.set('voice.webm', file);
+                this.hasMultimediaAttachments = true;
+                
+                await this.handleSubmit();
+            }
+
+            // Speak text using TTS, waiting for completion
+            async speakText(text) {
+                if (!('speechSynthesis' in window)) {
+                    console.log('TTS not supported');
+                    return;
+                }
+
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = this.languageCodes[this.lastTargetLanguage] || 'en-US';
+                utterance.rate = 0.9; // Slightly slower for better comprehension
+                
+                return new Promise((resolve) => {
+                    utterance.onend = resolve;
+                    utterance.onerror = resolve; // Resolve even on error to continue flow
+                    window.speechSynthesis.speak(utterance);
+                });
             }
 
             // Generate dynamic translation prompt based on selected language pair
@@ -511,6 +706,9 @@ Do not include any other text, explanations, or formatting outside of this JSON 
                                                             if (jsonResponse.transcript && jsonResponse.translation) {
                                                                 jsonParsed = true;
                                                                 
+                                                                // Save target language for TTS
+                                                                this.lastTargetLanguage = jsonResponse.target_language;
+                                                                
                                                                 // Remove cursors and add final actions
                                                                 if (this.currentTranscriptMessage) {
                                                                     const transcriptCursor = this.currentTranscriptMessage.querySelector('.streaming-cursor');
@@ -608,7 +806,11 @@ Do not include any other text, explanations, or formatting outside of this JSON 
                 this.updateSendButton();
 
                 const messageAttachments = new Map(this.attachedFiles);
-                this.addMessage('user', message, messageAttachments); // Show original message to user
+                
+                // Add user message only if not in voice mode
+                if (!this.voiceMode) {
+                    this.addMessage('user', message, messageAttachments); // Show original message to user
+                }
                 
                 this.messageInput.value = '';
                 this.autoResizeTextarea();
@@ -641,6 +843,15 @@ Do not include any other text, explanations, or formatting outside of this JSON 
                         // Final UI update on success
                         cursor.remove();
                         this.addMessageActions(this.currentStreamingMessage, fullResponse);
+
+                        // In voice mode, speak the translation and restart recording
+                        if (this.voiceMode && fullResponse.trim()) {
+                            await this.speakText(fullResponse);
+                            // Restart recording after TTS finishes
+                            if (this.voiceMode) { // Check again in case user exited voice mode during TTS
+                                await this.startRecording();
+                            }
+                        }
 
                     } catch (error) {
                         // Check if we still have a valid streaming message before accessing it
@@ -699,6 +910,15 @@ Do not include any other text, explanations, or formatting outside of this JSON 
                         // Remove the temporary message since we created separate transcript and translation messages
                         if (this.currentStreamingMessage && this.currentStreamingMessage.parentNode) {
                             this.currentStreamingMessage.remove();
+                        }
+
+                        // In voice mode, speak the translation and restart recording
+                        if (this.voiceMode && fullResponse.trim()) {
+                            await this.speakText(fullResponse);
+                            // Restart recording after TTS finishes
+                            if (this.voiceMode) { // Check again in case user exited voice mode during TTS
+                                await this.startRecording();
+                            }
                         }
 
                     } catch (error) {
