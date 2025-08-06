@@ -640,8 +640,6 @@ body, #root {
         <div class="unified-buttons">
           <button class="unified-button" id="translator-btn">Multimodal Interpreter</button>
           <button class="unified-button" id="folderCruncher-btn">Folder Cruncher</button>
-          <button class="unified-button" id="teacher-btn">Teacher</button>
-          <button class="unified-button" id="corrector-btn">Corrector</button>
         </div>
         
         <div class="create-job-section">
@@ -705,14 +703,6 @@ class LandingPage {
     
     document.getElementById('folderCruncher-btn').addEventListener('click', () => {
       this.goToChat('folderCruncher', null, 'static/fcrunch.html');
-    });
-    
-    document.getElementById('teacher-btn').addEventListener('click', () => {
-      this.goToChat('teacher');
-    });
-    
-    document.getElementById('corrector-btn').addEventListener('click', () => {
-      this.goToChat('corrector');
     });
 
     // Create AI Job button
