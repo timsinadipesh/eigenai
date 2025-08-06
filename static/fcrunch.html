@@ -25,15 +25,20 @@
             backdrop-filter: blur(10px);
             border: 2px dashed #0066cc;
             border-radius: 12px;
-            padding: 24px;
+            padding: 12px;
             text-align: center;
             margin-bottom: 20px;
             transition: all 300ms ease;
             cursor: pointer;
-            min-height: 120px; /* Fixed height */
+            height: 300px; /* Increased height for larger area */
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
+            position: relative;
+            width: 100%; /* Full width for wider box */
+            max-width: 800px; /* Optional max-width to prevent it from being too wide */
+            margin: 0 auto; /* Center it */
         }
 
         .folder-section:hover {
@@ -58,8 +63,8 @@
         }
 
         .folder-icon {
-            font-size: 48px;
-            margin-bottom: 12px;
+            font-size: 32px;
+            margin-bottom: 8px;
             color: #0066cc;
         }
 
@@ -68,23 +73,23 @@
         }
 
         .folder-text h3 {
-            margin: 0 0 8px 0;
-            font-size: 18px;
+            margin: 0 0 4px 0;
+            font-size: 16px;
             font-weight: 600;
             color: #1a1a1a;
         }
 
         .folder-text p {
             margin: 0;
-            font-size: 14px;
+            font-size: 12px;
             color: #666666;
             line-height: 1.4;
         }
 
         .folder-stats {
             display: none;
-            margin-top: 16px;
-            padding-top: 16px;
+            margin-top: 8px;
+            padding-top: 8px;
             border-top: 1px solid #e5e5e5;
             text-align: left;
         }
@@ -96,15 +101,15 @@
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
         .stat-item {
             background: rgba(255, 255, 255, 0.8);
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 13px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 11px;
         }
 
         .stat-label {
@@ -117,10 +122,10 @@
         }
 
         .file-list {
-            max-height: 120px;
+            max-height: 200px; /* Increased max-height for larger view */
             overflow-y: auto;
             text-align: left;
-            font-size: 12px;
+            font-size: 11px;
             color: #666666;
         }
 
@@ -137,16 +142,23 @@
             background: #dc3545;
             color: white;
             border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
             cursor: pointer;
-            margin-top: 12px;
+            margin-top: 8px;
             transition: background 200ms ease;
         }
 
         .clear-folder:hover {
             background: #c82333;
+        }
+
+        .subdir-toggle {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666666;
+            text-align: left;
         }
 
         .processing-indicator {
@@ -245,6 +257,48 @@
         .settings-btn:hover {
             opacity: 0.9;
         }
+
+        /* New Styles for Minimize/Maximize */
+        .minimize-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: transparent;
+            border: none;
+            font-size: 24px; /* Larger font size */
+            cursor: pointer;
+            color: #666;
+        }
+
+        .minimize-btn:hover {
+            color: #000;
+        }
+
+        /* Toggle container for centered icon above input */
+        #folder-toggle-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        #folder-toggle {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        #folder-toggle.loaded::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+        }
     </style>
 </head>
 <body>
@@ -277,32 +331,53 @@
                 this.currentCustomJob = null;
                 
                 // Folder processing state
-                this.folderContents = new Map(); // fileName -> content
+                this.folderChunks = []; // Array of {chunkText, filePath, chunkId, isSubdir}
                 this.folderStats = {
                     totalFiles: 0,
                     processedFiles: 0,
                     supportedFiles: 0,
-                    totalSize: 0
+                    totalSize: 0,
+                    totalChunks: 0
                 };
                 this.supportedExtensions = ['.md', '.txt', '.json', '.js', '.py', '.html', '.css', '.xml', '.csv'];
+                this.chunkSize = 500; // Words per chunk for splitting
+                this.topK = 5; // Number of top chunks to retrieve for RAG
                 
                 this.loadSystemMessage();
             }
 
-            // Override initialize to inject folder section and settings modal
+            // Override initialize to inject folder section, toggle button, and settings modal
             async initialize() {
                 await super.initialize();
                 this.injectFolderSection();
+                this.injectFolderToggle();
                 this.injectSettingsModal();
                 this.handleCustomJobSetup();
                 this.setupFolderHandlers();
             }
 
-            // Inject folder upload section
+            // Inject folder toggle (minimized icon) in a centered container above the input section
+            injectFolderToggle() {
+                const inputSection = document.querySelector('.input-section');
+                const toggleHTML = `
+                    <div id="folder-toggle-container" style="display: none;">
+                        <button id="folder-toggle" title="Toggle Folder Details">📁</button>
+                    </div>
+                `;
+                inputSection.insertAdjacentHTML('beforebegin', toggleHTML);
+
+                // Event listener for toggle
+                document.getElementById('folder-toggle').addEventListener('click', () => {
+                    this.maximizeFolderSection();
+                });
+            }
+
+            // Inject folder upload section (with minimize button) before the input section
             injectFolderSection() {
                 const inputSection = document.querySelector('.input-section');
                 const folderHTML = `
                     <div class="folder-section" id="folder-section">
+                        <button class="minimize-btn" id="minimize-btn" title="Minimize" style="display: none;">−</button>
                         <div class="folder-icon">📁</div>
                         <div class="folder-text">
                             <h3>Select or Drop Folder</h3>
@@ -330,587 +405,706 @@
                                     <div class="stat-label">Total Size</div>
                                     <div class="stat-value" id="stat-size">0 KB</div>
                                 </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Chunks</div>
+                                    <div class="stat-value" id="stat-chunks">0</div>
+                                </div>
                             </div>
                             <div class="file-list" id="file-list"></div>
                             <button class="clear-folder" onclick="clearFolder()">Clear Folder</button>
+                            <div class="subdir-toggle">
+                                <label>
+                                    <input type="checkbox" id="include-subdirs" checked> Include subdirectories in queries
+                                </label>
+                            </div>
                         </div>
                         <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
                     </div>
                 `;
-                inputSection.insertAdjacentHTML('afterbegin', folderHTML);
+                inputSection.insertAdjacentHTML('beforebegin', folderHTML);
+
+                // Minimize button listener
+                document.getElementById('minimize-btn').addEventListener('click', () => {
+                    this.minimizeFolderSection();
+                });
+            }
+
+            // Minimize the folder section
+            minimizeFolderSection() {
+                const folderSection = document.getElementById('folder-section');
+                const toggleContainer = document.getElementById('folder-toggle-container');
+                const toggleButton = document.getElementById('folder-toggle');
+                const minimizeBtn = document.getElementById('minimize-btn');
+
+                folderSection.classList.add('hidden');
+                toggleContainer.style.display = 'flex';
+                if (this.folderChunks.length > 0) {
+                    toggleButton.classList.add('loaded');
+                }
+                minimizeBtn.style.display = 'none';
+            }
+
+            // Maximize the folder section
+            maximizeFolderSection() {
+                const folderSection = document.getElementById('folder-section');
+                const toggleContainer = document.getElementById('folder-toggle-container');
+                const minimizeBtn = document.getElementById('minimize-btn');
+
+                folderSection.classList.remove('hidden');
+                toggleContainer.style.display = 'none';
+                if (folderSection.classList.contains('loaded')) {
+                    minimizeBtn.style.display = 'block';
+                }
             }
 
             // Setup folder drag and drop handlers
-            setupFolderHandlers() {
-                const folderSection = document.getElementById('folder-section');
-                const folderInput = document.getElementById('folder-input');
+                    setupFolderHandlers() {
+            const folderSection = document.getElementById('folder-section');
+            const folderInput = document.getElementById('folder-input');
 
-                // Click to select folder
-                folderSection.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('clear-folder')) return;
-                    folderInput.click();
-                });
+            // Click to select folder
+            folderSection.addEventListener('click', (e) => {
+                if (e.target.classList.contains('clear-folder') || e.target.classList.contains('minimize-btn') || e.target.closest('.subdir-toggle')) return;
+                folderInput.click();
+            });
 
-                // File input change
-                folderInput.addEventListener('change', (e) => {
-                    this.handleFolderSelect(e.target.files);
-                });
+            // File input change
+            folderInput.addEventListener('change', (e) => {
+                this.handleFolderSelect(e.target.files);
+            });
 
-                // Drag and drop events
-                folderSection.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    folderSection.classList.add('dragover');
-                });
+            // Drag and drop events
+            folderSection.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                folderSection.classList.add('dragover');
+            });
 
-                folderSection.addEventListener('dragleave', (e) => {
-                    e.preventDefault();
-                    folderSection.classList.remove('dragover');
-                });
+            folderSection.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                folderSection.classList.remove('dragover');
+            });
 
-                folderSection.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    folderSection.classList.remove('dragover');
-                    
-                    const items = e.dataTransfer.items;
-                    const files = [];
-                    
-                    // Process dropped items
-                    for (let i = 0; i < items.length; i++) {
-                        const item = items[i];
-                        if (item.kind === 'file') {
-                            const entry = item.webkitGetAsEntry();
-                            if (entry && entry.isDirectory) {
-                                this.processDirectoryEntry(entry, files).then(() => {
-                                    this.handleFolderSelect(files);
-                                });
-                                return;
-                            }
+            folderSection.addEventListener('drop', (e) => {
+                e.preventDefault();
+                folderSection.classList.remove('dragover');
+                
+                const items = e.dataTransfer.items;
+                const files = [];
+                
+                // Process dropped items
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind === 'file') {
+                        const entry = item.webkitGetAsEntry();
+                        if (entry && entry.isDirectory) {
+                            this.processDirectoryEntry(entry, files).then(() => {
+                                this.handleFolderSelect(files);
+                            });
+                            return;
                         }
                     }
-                    
-                    // If no directory, handle as regular files
-                    this.handleFolderSelect(e.dataTransfer.files);
-                });
-            }
-
-            // Process directory entry recursively
-            async processDirectoryEntry(entry, files) {
-                return new Promise((resolve) => {
-                    if (entry.isDirectory) {
-                        const reader = entry.createReader();
-                        reader.readEntries(async (entries) => {
-                            for (const childEntry of entries) {
-                                await this.processDirectoryEntry(childEntry, files);
-                            }
-                            resolve();
-                        });
-                    } else {
-                        entry.file((file) => {
-                            files.push(file);
-                            resolve();
-                        });
-                    }
-                });
-            }
-
-            // Handle folder selection
-            async handleFolderSelect(files) {
-                if (!files || files.length === 0) return;
-
-                const processingIndicator = document.getElementById('processing-indicator');
-                const folderSection = document.getElementById('folder-section');
-                
-                // Show processing state
-                processingIndicator.classList.add('active');
-                
-                // Reset folder contents
-                this.folderContents.clear();
-                this.folderStats = {
-                    totalFiles: files.length,
-                    processedFiles: 0,
-                    supportedFiles: 0,
-                    totalSize: 0
-                };
-
-                // Process files
-                for (const file of files) {
-                    await this.processFile(file);
-                }
-
-                // Update UI
-                this.updateFolderStats();
-                processingIndicator.classList.remove('active');
-                folderSection.classList.add('loaded');
-                
-                // Update welcome message
-                this.updateWelcomeMessage();
-            }
-
-            // Process individual file
-            async processFile(file) {
-                const extension = '.' + file.name.split('.').pop().toLowerCase();
-                this.folderStats.totalSize += file.size;
-                
-                if (this.supportedExtensions.includes(extension)) {
-                    this.folderStats.supportedFiles++;
-                    
-                    try {
-                        const content = await this.readFileContent(file);
-                        this.folderContents.set(file.name, {
-                            content: content,
-                            size: file.size,
-                            path: file.webkitRelativePath || file.name,
-                            type: extension
-                        });
-                    } catch (error) {
-                        console.error(`Error reading file ${file.name}:`, error);
-                    }
                 }
                 
-                this.folderStats.processedFiles++;
-            }
+                // If no directory, handle as regular files
+                this.handleFolderSelect(e.dataTransfer.files);
+            });
+        }
 
-            // Read file content
-            async readFileContent(file) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => resolve(e.target.result);
-                    reader.onerror = (e) => reject(e);
-                    reader.readAsText(file);
-                });
-            }
-
-            // Update folder statistics display
-            updateFolderStats() {
-                const statsContainer = document.getElementById('folder-stats');
-                const statTotal = document.getElementById('stat-total');
-                const statProcessed = document.getElementById('stat-processed');
-                const statSupported = document.getElementById('stat-supported');
-                const statSize = document.getElementById('stat-size');
-                const fileList = document.getElementById('file-list');
-
-                statsContainer.classList.add('active');
-                
-                statTotal.textContent = this.folderStats.totalFiles;
-                statProcessed.textContent = this.folderStats.processedFiles;
-                statSupported.textContent = this.folderStats.supportedFiles;
-                statSize.textContent = this.formatFileSize(this.folderStats.totalSize);
-
-                // Update file list
-                fileList.innerHTML = '';
-                for (const [fileName, fileData] of this.folderContents) {
-                    const fileDiv = document.createElement('div');
-                    fileDiv.textContent = `${fileData.path} (${this.formatFileSize(fileData.size)})`;
-                    fileList.appendChild(fileDiv);
-                }
-            }
-
-            // Format file size
-            formatFileSize(bytes) {
-                if (bytes === 0) return '0 B';
-                const k = 1024;
-                const sizes = ['B', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-            }
-
-            // Update welcome message based on folder state
-            updateWelcomeMessage() {
-                const welcomeMessage = document.querySelector('.welcome-message');
-                if (welcomeMessage && this.folderContents.size > 0) {
-                    welcomeMessage.innerHTML = `
-                        <p>Folder Cruncher Ready</p>
-                        <p>Loaded ${this.folderContents.size} files. Ask questions about your folder contents!</p>
-                    `;
-                }
-            }
-
-            // Clear folder contents
-            clearFolderContents() {
-                this.folderContents.clear();
-                this.folderStats = {
-                    totalFiles: 0,
-                    processedFiles: 0,
-                    supportedFiles: 0,
-                    totalSize: 0
-                };
-                
-                const folderSection = document.getElementById('folder-section');
-                const folderStats = document.getElementById('folder-stats');
-                const processingIndicator = document.getElementById('processing-indicator');
-                
-                folderSection.classList.remove('loaded', 'hidden');
-                folderStats.classList.remove('active');
-                processingIndicator.classList.remove('active');
-                
-                // Reset welcome message
-                const welcomeMessage = document.querySelector('.welcome-message');
-                if (welcomeMessage) {
-                    welcomeMessage.innerHTML = `
-                        <p>Folder Cruncher</p>
-                        <p>Select a folder to analyze and query its contents</p>
-                    `;
-                }
-            }
-
-            // Override message processing to include folder context
-            processMessage(message) {
-                let contextualMessage = message;
-                
-                // Add folder contents as context if available
-                if (this.folderContents.size > 0) {
-                    let folderContext = "=== FOLDER CONTENTS ANALYSIS ===\n\n";
-                    
-                    // Add metadata
-                    folderContext += `Total files processed: ${this.folderContents.size}\n`;
-                    folderContext += `Total size: ${this.formatFileSize(this.folderStats.totalSize)}\n\n`;
-                    
-                    // Add each file's content
-                    for (const [fileName, fileData] of this.folderContents) {
-                        folderContext += `--- FILE: ${fileData.path} (${fileData.type}, ${this.formatFileSize(fileData.size)}) ---\n`;
-                        
-                        // Truncate very large files to prevent context overflow
-                        let content = fileData.content;
-                        if (content.length > 10000) {
-                            content = content.substring(0, 10000) + "\n... [FILE TRUNCATED - showing first 10,000 characters] ...";
+        // Process directory entry recursively
+        async processDirectoryEntry(entry, files) {
+            return new Promise((resolve) => {
+                if (entry.isDirectory) {
+                    const reader = entry.createReader();
+                    reader.readEntries(async (entries) => {
+                        for (const childEntry of entries) {
+                            await this.processDirectoryEntry(childEntry, files);
                         }
-                        
-                        folderContext += content + "\n\n";
-                    }
-                    
-                    folderContext += `=== END FOLDER CONTENTS ===\n\n`;
-                    folderContext += `USER QUERY: ${message}\n\n`;
-                    folderContext += "INSTRUCTIONS: Analyze the folder contents above and answer the user's query based SPECIFICALLY on the actual file contents provided. Reference specific files, code, or content when relevant.";
-                    
-                    contextualMessage = folderContext;
+                        resolve();
+                    });
                 } else {
-                    // No folder loaded, use original message
-                    contextualMessage = message;
+                    entry.file((file) => {
+                        files.push(file);
+                        resolve();
+                    });
                 }
-                
-                // Apply system message if available
-                if (this.systemMessage.trim()) {
-                    if (this.folderContents.size > 0) {
-                        contextualMessage = `SYSTEM INSTRUCTIONS: ${this.systemMessage}\n\n${contextualMessage}`;
-                    } else if (message.trim()) {
-                        contextualMessage = `${this.systemMessage}: ${message}`;
-                    } else {
-                        contextualMessage = this.systemMessage;
-                    }
-                }
-                
-                return contextualMessage;
+            });
+        }
+
+        // Handle folder selection
+        async handleFolderSelect(files) {
+            if (!files || files.length === 0) return;
+
+            const processingIndicator = document.getElementById('processing-indicator');
+            const folderSection = document.getElementById('folder-section');
+            
+            // Show processing state
+            processingIndicator.classList.add('active');
+            
+            // Reset folder contents
+            this.folderChunks = [];
+            this.folderStats = {
+                totalFiles: files.length,
+                processedFiles: 0,
+                supportedFiles: 0,
+                totalSize: 0,
+                totalChunks: 0
+            };
+
+            // Process files
+            for (const file of files) {
+                await this.processFile(file);
             }
 
-            // Handle custom job setup from transition data
-            handleCustomJobSetup() {
-                const transitionData = sessionStorage.getItem('chatTransition');
-                if (transitionData) {
-                    try {
-                        const data = JSON.parse(transitionData);
+            // Update UI
+            this.updateFolderStats();
+            processingIndicator.classList.remove('active');
+            folderSection.classList.add('loaded');
+            document.getElementById('minimize-btn').style.display = 'block'; // Show minimize button
+            
+            // Update welcome message
+            this.updateWelcomeMessage();
+
+            // Auto-scroll to bottom of folder section
+            folderSection.scrollTop = folderSection.scrollHeight;
+        }
+
+        // Process individual file: Read, chunk, and index
+        async processFile(file) {
+            const extension = '.' + file.name.split('.').pop().toLowerCase();
+            this.folderStats.totalSize += file.size;
+            
+            if (this.supportedExtensions.includes(extension)) {
+                this.folderStats.supportedFiles++;
+                
+                try {
+                    const content = await this.readFileContent(file);
+                    const filePath = file.webkitRelativePath || file.name;
+                    const isSubdir = filePath.split('/').length > 2; // Assuming path like "folder/file.txt" (1 level) vs "folder/sub/file.txt" (2+)
+                    const chunks = this.chunkContent(content, filePath, isSubdir);
+                    this.folderChunks.push(...chunks);
+                    this.folderStats.totalChunks += chunks.length;
+                } catch (error) {
+                    console.error(`Error reading file ${file.name}:`, error);
+                }
+            }
+            
+            this.folderStats.processedFiles++;
+        }
+
+        // Read file content
+        async readFileContent(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(e);
+                reader.readAsText(file);
+            });
+        }
+
+        // Chunk content into smaller pieces
+        chunkContent(content, filePath, isSubdir) {
+            const words = content.split(/\s+/);
+            const chunks = [];
+            for (let i = 0; i < words.length; i += this.chunkSize) {
+                const chunkText = words.slice(i, i + this.chunkSize).join(' ');
+                chunks.push({
+                    chunkText,
+                    filePath,
+                    chunkId: `${filePath}-${i / this.chunkSize}`,
+                    words: new Set(words.slice(i, i + this.chunkSize).map(w => w.toLowerCase())), // For fast keyword matching
+                    isSubdir
+                });
+            }
+            return chunks;
+        }
+
+        // Improved retrieval: Score chunks by keyword overlap with query (simple BM25-like weighting)
+        retrieveRelevantChunks(query, topK = this.topK) {
+            const includeSubdirs = document.getElementById('include-subdirs').checked;
+            
+            // Filter chunks based on subdir toggle
+            let filteredChunks = this.folderChunks;
+            if (!includeSubdirs) {
+                filteredChunks = this.folderChunks.filter(chunk => !chunk.isSubdir);
+            }
+
+            const queryWords = new Set(query.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+            
+            // Simple IDF approximation: document frequency
+            const docFreq = {};
+            filteredChunks.forEach(chunk => {
+                queryWords.forEach(word => {
+                    if (chunk.words.has(word)) {
+                        docFreq[word] = (docFreq[word] || 0) + 1;
+                    }
+                });
+            });
+            
+            const totalDocs = filteredChunks.length;
+            const avgDocLen = filteredChunks.reduce((sum, chunk) => sum + chunk.chunkText.split(/\s+/).length, 0) / totalDocs || 1;
+            
+            // BM25 parameters
+            const k1 = 1.5;
+            const b = 0.75;
+            
+            const scoredChunks = filteredChunks.map(chunk => {
+                let score = 0;
+                const termFreq = {};
+                const chunkWords = chunk.chunkText.split(/\s+/);
+                const docLen = chunkWords.length;
+                
+                queryWords.forEach(word => {
+                    termFreq[word] = chunkWords.filter(w => w.toLowerCase() === word).length;
+                });
+                
+                queryWords.forEach(word => {
+                    if (termFreq[word] > 0) {
+                        const idf = Math.log((totalDocs - (docFreq[word] || 0) + 0.5) / ((docFreq[word] || 0) + 0.5) + 1);
+                        const tf = termFreq[word];
+                        score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (docLen / avgDocLen)));
+                    }
+                });
+                
+                return { chunk, score };
+            });
+
+            // Sort by score descending and take topK
+            scoredChunks.sort((a, b) => b.score - a.score);
+            return scoredChunks.slice(0, topK).map(item => item.chunk);
+        }
+
+        // Update folder statistics display
+        updateFolderStats() {
+            const statsContainer = document.getElementById('folder-stats');
+            const statTotal = document.getElementById('stat-total');
+            const statProcessed = document.getElementById('stat-processed');
+            const statSupported = document.getElementById('stat-supported');
+            const statSize = document.getElementById('stat-size');
+            const statChunks = document.getElementById('stat-chunks');
+            const fileList = document.getElementById('file-list');
+
+            statsContainer.classList.add('active');
+            
+            statTotal.textContent = this.folderStats.totalFiles;
+            statProcessed.textContent = this.folderStats.processedFiles;
+            statSupported.textContent = this.folderStats.supportedFiles;
+            statSize.textContent = this.formatFileSize(this.folderStats.totalSize);
+            statChunks.textContent = this.folderStats.totalChunks;
+
+            // Update file list (show unique file paths with chunk count)
+            fileList.innerHTML = '';
+            const fileChunkMap = new Map();
+            this.folderChunks.forEach(chunk => {
+                fileChunkMap.set(chunk.filePath, (fileChunkMap.get(chunk.filePath) || 0) + 1);
+            });
+            for (const [filePath, chunkCount] of fileChunkMap) {
+                const fileDiv = document.createElement('div');
+                fileDiv.textContent = `${filePath} (${chunkCount} chunks)`;
+                fileList.appendChild(fileDiv);
+            }
+        }
+
+        // Format file size
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // Update welcome message based on folder state
+        updateWelcomeMessage() {
+            const welcomeMessage = document.querySelector('.welcome-message');
+            if (welcomeMessage && this.folderChunks.length > 0) {
+                welcomeMessage.innerHTML = `
+                    <p>Folder Cruncher Ready</p>
+                    <p>Loaded ${this.folderStats.supportedFiles} files with ${this.folderStats.totalChunks} chunks. Ask questions about your folder contents!</p>
+                `;
+            }
+        }
+
+        // Clear folder contents
+        clearFolderContents() {
+            this.folderChunks = [];
+            this.folderStats = {
+                totalFiles: 0,
+                processedFiles: 0,
+                supportedFiles: 0,
+                totalSize: 0,
+                totalChunks: 0
+            };
+            
+            const folderSection = document.getElementById('folder-section');
+            const folderStats = document.getElementById('folder-stats');
+            const processingIndicator = document.getElementById('processing-indicator');
+            const toggleContainer = document.getElementById('folder-toggle-container');
+            const toggleButton = document.getElementById('folder-toggle');
+            const minimizeBtn = document.getElementById('minimize-btn');
+            
+            folderSection.classList.remove('loaded', 'hidden');
+            folderStats.classList.remove('active');
+            processingIndicator.classList.remove('active');
+            toggleContainer.style.display = 'none';
+            toggleButton.classList.remove('loaded');
+            minimizeBtn.style.display = 'none';
+            
+            // Reset welcome message
+            const welcomeMessage = document.querySelector('.welcome-message');
+            if (welcomeMessage) {
+                welcomeMessage.innerHTML = `
+                    <p>Folder Cruncher</p>
+                    <p>Select a folder to analyze and query its contents</p>
+                `;
+            }
+        }
+
+        // Override message processing to include RAG-based folder context
+        processMessage(message) {
+            let contextualMessage = message;
+            
+            // Add folder contents as context if available using RAG
+            if (this.folderChunks.length > 0) {
+                const relevantChunks = this.retrieveRelevantChunks(message, this.topK);
+                
+                let folderContext = "=== RELEVANT FOLDER CONTENTS (RAG Retrieval) ===\n\n";
+                
+                // Add metadata
+                folderContext += `Retrieved ${relevantChunks.length} relevant chunks from ${this.folderStats.totalChunks} total chunks.\n\n`;
+                
+                // Add each relevant chunk
+                relevantChunks.forEach((chunk, index) => {
+                    folderContext += `--- CHUNK ${index + 1}: From file ${chunk.filePath} (Chunk ID: ${chunk.chunkId}) ---\n`;
+                    folderContext += `${chunk.chunkText}\n\n`;
+                });
+                
+                folderContext += `=== END RELEVANT CONTENTS ===\n\n`;
+                folderContext += `USER QUERY: ${message}\n\n`;
+                folderContext += "INSTRUCTIONS: Analyze ONLY the relevant chunks above and answer the user's query based SPECIFICALLY on them. Reference specific files and chunks when relevant. If the query cannot be answered from the provided chunks, say so.";
+                
+                contextualMessage = folderContext;
+            } else {
+                // No folder loaded, use original message
+                contextualMessage = message;
+            }
+            
+            // Apply system message if available
+            if (this.systemMessage.trim()) {
+                if (this.folderChunks.length > 0) {
+                    contextualMessage = `SYSTEM INSTRUCTIONS: ${this.systemMessage}\n\n${contextualMessage}`;
+                } else if (message.trim()) {
+                    contextualMessage = `${this.systemMessage}: ${message}`;
+                } else {
+                    contextualMessage = this.systemMessage;
+                }
+            }
+            
+            return contextualMessage;
+        }
+
+        // Handle custom job setup from transition data
+        handleCustomJobSetup() {
+            const transitionData = sessionStorage.getItem('chatTransition');
+            if (transitionData) {
+                try {
+                    const data = JSON.parse(transitionData);
+                    
+                    if (data.customJob) {
+                        this.currentCustomJob = data.customJob;
+                        this.systemMessage = data.customJob.systemPrompt;
                         
-                        if (data.customJob) {
-                            this.currentCustomJob = data.customJob;
-                            this.systemMessage = data.customJob.systemPrompt;
-                            
-                            // Update UI to reflect custom job
-                            this.updateUIForCustomJob();
-                        }
-                    } catch (error) {
-                        console.error('Error parsing transition data:', error);
+                        // Update UI to reflect custom job
+                        this.updateUIForCustomJob();
                     }
+                } catch (error) {
+                    console.error('Error parsing transition data:', error);
                 }
             }
+        }
 
-            // Update UI elements for custom job
-            updateUIForCustomJob() {
-                if (!this.currentCustomJob) return;
+        // Update UI elements for custom job
+        updateUIForCustomJob() {
+            if (!this.currentCustomJob) return;
 
-                // Update mode indicator
-                const modeIndicator = document.querySelector('#mode-indicator');
-                if (modeIndicator) {
-                    modeIndicator.textContent = this.currentCustomJob.name.toUpperCase();
-                }
-
-                // Update welcome message
-                const welcomeMessage = document.querySelector('.welcome-message');
-                if (welcomeMessage) {
-                    welcomeMessage.innerHTML = `
-                        <p>Folder Cruncher with ${this.currentCustomJob.name}</p>
-                        <p>Your custom folder analysis assistant</p>
-                    `;
-                }
-
-                // Update page title
-                document.title = `frende - ${this.currentCustomJob.name}`;
+            // Update mode indicator
+            const modeIndicator = document.querySelector('#mode-indicator');
+            if (modeIndicator) {
+                modeIndicator.textContent = this.currentCustomJob.name.toUpperCase();
             }
 
-            // Inject settings modal into DOM
-            injectSettingsModal() {
-                const modalHTML = `
-                    <div id="settingsModal" class="settings-modal">
-                        <div class="settings-content">
-                            <h2>${this.currentCustomJob ? 'Job Settings' : 'Folder Cruncher Settings'}</h2>
-                            <label for="systemMessage">
-                                ${this.currentCustomJob ? 'Job Prompt:' : 'System Message:'}
-                            </label>
-                            <textarea 
-                                id="systemMessage" 
-                                placeholder="${this.currentCustomJob ? 
-                                    'Modify the behavior of your custom AI job...' : 
-                                    'Configure how Folder Cruncher should analyze and organize folders'}"
-                                ${this.currentCustomJob ? 'readonly' : ''}
-                            ></textarea>
-                            ${this.currentCustomJob ? `
-                                <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">
-                                    This is a custom AI job. The prompt is read-only. 
-                                    Go back to the home page to modify or create new jobs.
-                                </p>
-                            ` : ''}
-                            <div class="settings-actions">
-                                <button class="settings-btn secondary" onclick="closeSettings()">Cancel</button>
-                                ${!this.currentCustomJob ? 
-                                    '<button class="settings-btn primary" onclick="saveSettings()">Save</button>' : 
-                                    ''
-                                }
-                            </div>
+            // Update welcome message
+            const welcomeMessage = document.querySelector('.welcome-message');
+            if (welcomeMessage) {
+                welcomeMessage.innerHTML = `
+                    <p>Folder Cruncher with ${this.currentCustomJob.name}</p>
+                    <p>Your custom folder analysis assistant</p>
+                `;
+            }
+
+            // Update page title
+            document.title = `frende - ${this.currentCustomJob.name}`;
+        }
+
+        // Inject settings modal into DOM
+        injectSettingsModal() {
+            const modalHTML = `
+                <div id="settingsModal" class="settings-modal">
+                    <div class="settings-content">
+                        <h2>${this.currentCustomJob ? 'Job Settings' : 'Folder Cruncher Settings'}</h2>
+                        <label for="systemMessage">
+                            ${this.currentCustomJob ? 'Job Prompt:' : 'System Message:'}
+                        </label>
+                        <textarea 
+                            id="systemMessage" 
+                            placeholder="${this.currentCustomJob ? 
+                                'Modify the behavior of your custom AI job...' : 
+                                'Configure how Folder Cruncher should analyze and organize folders'}"
+                            ${this.currentCustomJob ? 'readonly' : ''}
+                        ></textarea>
+                        ${this.currentCustomJob ? `
+                            <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">
+                                This is a custom AI job. The prompt is read-only. 
+                                Go back to the home page to modify or create new jobs.
+                            </p>
+                        ` : ''}
+                        <div class="settings-actions">
+                            <button class="settings-btn secondary" onclick="closeSettings()">Cancel</button>
+                            ${!this.currentCustomJob ? 
+                                '<button class="settings-btn primary" onclick="saveSettings()">Save</button>' : 
+                                ''
+                            }
                         </div>
                     </div>
-                `;
-                document.body.insertAdjacentHTML('beforeend', modalHTML);
-            }
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
 
-            // Load system message from localStorage or custom job
-            loadSystemMessage() {
-                if (this.currentCustomJob) {
-                    this.systemMessage = this.currentCustomJob.systemPrompt;
-                } else {
-                    this.systemMessage = localStorage.getItem('folderCruncherSystemMessage') || '';
-                }
-            }
-
-            // Save system message to localStorage (only for non-custom jobs)
-            saveSystemMessage() {
-                if (!this.currentCustomJob) {
-                    localStorage.setItem('folderCruncherSystemMessage', this.systemMessage);
-                }
-            }
-
-            // Override message processing to prepend system message
-            processMessage(message) {
-                if (!this.systemMessage.trim()) {
-                    return message;
-                }
-                
-                // If message has text content, prepend system message with ": "
-                if (message.trim()) {
-                    return `${this.systemMessage}: ${message}`;
-                } else {
-                    // If only non-text modalities, return system message as is
-                    return this.systemMessage;
-                }
-            }
-
-            // Override handleSubmit to use processMessage
-            async handleSubmit() {
-                if (this.isGenerating) {
-                    this.stopGeneration();
-                    return;
-                }
-                
-                const message = this.messageInput.value.trim();
-                if (!message && this.attachedFiles.size === 0) return;
-
-                // Process the message with system prompt
-                const processedMessage = this.processMessage(message);
-
-                this.isGenerating = true;
-                this.updateSendButton();
-
-                const messageAttachments = new Map(this.attachedFiles);
-                this.addMessage('user', message, messageAttachments); // Show original message to user
-                
-                this.messageInput.value = '';
-                this.autoResizeTextarea();
-                this.clearAttachments();
-                
-                // Prepare the UI for the assistant's response
-                this.currentStreamingMessage = this.addMessage('assistant', '');
-                const messageContent = this.currentStreamingMessage.querySelector('.message-content');
-                const cursor = document.createElement('span');
-                cursor.className = 'streaming-cursor';
-                messageContent.appendChild(cursor);
-
-                try {
-                    const formData = new FormData();
-                    formData.append('text', processedMessage); // Send processed message to API
-                    formData.append('max_tokens', this.config.maxTokens.toString());
-                    
-                    messageAttachments.forEach((file, name) => {
-                        if (file.type.startsWith('image/')) {
-                            formData.append('image', file);
-                        } else if (file.type.startsWith('audio/')) {
-                            formData.append('audio', file);
-                        }
-                    });
-
-                    const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
-                    
-                    // Final UI update on success
-                    cursor.remove();
-                    this.addMessageActions(this.currentStreamingMessage, fullResponse);
-
-                } catch (error) {
-                    // Check if we still have a valid streaming message before accessing it
-                    if (this.currentStreamingMessage) {
-                        const messageContent = this.currentStreamingMessage.querySelector('.message-content');
-                        if (messageContent) {
-                            cursor.remove(); // Remove cursor
-                            
-                            if (error.name === 'AbortError') {
-                                console.log('Generation stopped by user.');
-                                const stoppedDiv = document.createElement('div');
-                                stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
-                                stoppedDiv.textContent = '[Generation stopped]';
-                                messageContent.appendChild(stoppedDiv);
-                                
-                                const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
-                                if (textContent) {
-                                    this.addMessageActions(this.currentStreamingMessage, textContent);
-                                }
-                            } else {
-                                messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
-                            }
-                        }
-                    }
-                } finally {
-                    this.isGenerating = false;
-                    this.isStreaming = false;
-                    this.updateSendButton();
-                    this.abortController = null;
-                    this.currentStreamingMessage = null;
-                }
-            }
-
-            // Override handleTransitionData to properly handle custom jobs
-            handleTransitionData() {
-                const transitionData = sessionStorage.getItem('chatTransition');
-                if (transitionData) {
-                    try {
-                        const data = JSON.parse(transitionData);
-                        
-                        // Handle custom job first
-                        if (data.customJob) {
-                            this.currentCustomJob = data.customJob;
-                            this.systemMessage = data.customJob.systemPrompt;
-                            this.updateUIForCustomJob();
-                        }
-                        
-                        // Handle message if present
-                        if (data.message) {
-                            this.messageInput.value = data.message;
-                            this.autoResizeTextarea();
-                        }
-                        
-                        // Handle files if present
-                        if (data.files && data.files.length > 0) {
-                            data.files.forEach(([name, fileData]) => {
-                                fetch(fileData.data)
-                                    .then(res => res.blob())
-                                    .then(blob => {
-                                        const file = new File([blob], fileData.name, { type: fileData.type });
-                                        this.attachedFiles.set(name, file);
-                                        this.renderAttachments();
-                                        this.updateSendButton();
-                                    });
-                            });
-                        }
-                        
-                        // Auto-send if from direct mode
-                        if (data.mode === 'direct' && (data.message || (data.files && data.files.length > 0))) {
-                            setTimeout(() => {
-                                if (this.messageInput.value.trim() || this.attachedFiles.size > 0) {
-                                    this.handleSubmit();
-                                }
-                            }, 500);
-                        }
-                        
-                        // Clear transition data
-                        sessionStorage.removeItem('chatTransition');
-                        
-                    } catch (e) {
-                        console.error('Error parsing transition data:', e);
-                        sessionStorage.removeItem('chatTransition');
-                    }
-                }
+        // Load system message from localStorage or custom job
+        loadSystemMessage() {
+            if (this.currentCustomJob) {
+                this.systemMessage = this.currentCustomJob.systemPrompt;
+            } else {
+                this.systemMessage = localStorage.getItem('folderCruncherSystemMessage') || '';
             }
         }
 
-        let folderCruncherApp;
-
-        // Global function to clear folder (called from HTML)
-        function clearFolder() {
-            if (folderCruncherApp) {
-                folderCruncherApp.clearFolderContents();
+        // Save system message to localStorage (only for non-custom jobs)
+        saveSystemMessage() {
+            if (!this.currentCustomJob) {
+                localStorage.setItem('folderCruncherSystemMessage', this.systemMessage);
             }
         }
 
-        // Settings Modal Functions
-        function openSettings() {
-            const modal = document.getElementById('settingsModal');
-            const textarea = document.getElementById('systemMessage');
-            
-            // Load current system message
-            textarea.value = folderCruncherApp.systemMessage;
-            modal.classList.add('active');
-            
-            // Focus on textarea if not readonly
-            if (!folderCruncherApp.currentCustomJob) {
-                setTimeout(() => textarea.focus(), 100);
-            }
-        }
-
-        function closeSettings() {
-            const modal = document.getElementById('settingsModal');
-            modal.classList.remove('active');
-        }
-
-        function saveSettings() {
-            if (folderCruncherApp.currentCustomJob) {
-                // Don't save for custom jobs
-                closeSettings();
+        // Override handleSubmit to use processMessage and auto-minimize on send
+        async handleSubmit() {
+            if (this.isGenerating) {
+                this.stopGeneration();
                 return;
             }
             
-            const textarea = document.getElementById('systemMessage');
-            folderCruncherApp.systemMessage = textarea.value;
-            folderCruncherApp.saveSystemMessage();
-            closeSettings();
+            const message = this.messageInput.value.trim();
+            if (!message && this.attachedFiles.size === 0) return;
+
+            // Process the message with system prompt
+            const processedMessage = this.processMessage(message);
+
+            this.isGenerating = true;
+            this.updateSendButton();
+
+            const messageAttachments = new Map(this.attachedFiles);
+            this.addMessage('user', message, messageAttachments); // Show original message to user
+            
+            this.messageInput.value = '';
+            this.autoResizeTextarea();
+            this.clearAttachments();
+            
+            // Auto-minimize immediately after sending the query (if folder is loaded)
+            if (this.folderChunks.length > 0) {
+                this.minimizeFolderSection();
+            }
+            
+            // Prepare the UI for the assistant's response
+            this.currentStreamingMessage = this.addMessage('assistant', '');
+            const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+            const cursor = document.createElement('span');
+            cursor.className = 'streaming-cursor';
+            messageContent.appendChild(cursor);
+
+            try {
+                const formData = new FormData();
+                formData.append('text', processedMessage); // Send processed message to API
+                formData.append('max_tokens', this.config.maxTokens.toString());
+                
+                messageAttachments.forEach((file, name) => {
+                    if (file.type.startsWith('image/')) {
+                        formData.append('image', file);
+                    } else if (file.type.startsWith('audio/')) {
+                        formData.append('audio', file);
+                    }
+                });
+
+                const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
+                
+                // Final UI update on success
+                cursor.remove();
+                this.addMessageActions(this.currentStreamingMessage, fullResponse);
+
+            } catch (error) {
+                // Check if we still have a valid streaming message before accessing it
+                if (this.currentStreamingMessage) {
+                    const messageContent = this.currentStreamingMessage.querySelector('.message-content');
+                    if (messageContent) {
+                        cursor.remove(); // Remove cursor
+                        
+                        if (error.name === 'AbortError') {
+                            console.log('Generation stopped by user.');
+                            const stoppedDiv = document.createElement('div');
+                            stoppedDiv.style.cssText = 'color: #666; font-style: italic; margin-top: 8px; font-size: 14px;';
+                            stoppedDiv.textContent = '[Generation stopped]';
+                            messageContent.appendChild(stoppedDiv);
+                            
+                            const textContent = messageContent.textContent.replace('[Generation stopped]', '').trim();
+                            if (textContent) {
+                                this.addMessageActions(this.currentStreamingMessage, textContent);
+                            }
+                        } else {
+                            messageContent.innerHTML = `<div style="color: #dc2626;">Error: ${error.message}</div>`;
+                        }
+                    }
+                }
+            } finally {
+                this.isGenerating = false;
+                this.isStreaming = false;
+                this.updateSendButton();
+                this.abortController = null;
+                this.currentStreamingMessage = null;
+            }
         }
 
-        // Close modal when clicking outside
-        document.addEventListener('click', (e) => {
-            const modal = document.getElementById('settingsModal');
-            if (e.target === modal) {
-                closeSettings();
+        // Override handleTransitionData to properly handle custom jobs
+        handleTransitionData() {
+            const transitionData = sessionStorage.getItem('chatTransition');
+            if (transitionData) {
+                try {
+                    const data = JSON.parse(transitionData);
+                    
+                    // Handle custom job first
+                    if (data.customJob) {
+                        this.currentCustomJob = data.customJob;
+                        this.systemMessage = data.customJob.systemPrompt;
+                        this.updateUIForCustomJob();
+                    }
+                    
+                    // Handle message if present
+                    if (data.message) {
+                        this.messageInput.value = data.message;
+                        this.autoResizeTextarea();
+                    }
+                    
+                    // Handle files if present
+                    if (data.files && data.files.length > 0) {
+                        data.files.forEach(([name, fileData]) => {
+                            fetch(fileData.data)
+                                .then(res => res.blob())
+                                .then(blob => {
+                                    const file = new File([blob], fileData.name, { type: fileData.type });
+                                    this.attachedFiles.set(name, file);
+                                    this.renderAttachments();
+                                    this.updateSendButton();
+                                });
+                        });
+                    }
+                    
+                    // Auto-send if from direct mode
+                    if (data.mode === 'direct' && (data.message || (data.files && data.files.length > 0))) {
+                        setTimeout(() => {
+                            if (this.messageInput.value.trim() || this.attachedFiles.size > 0) {
+                                this.handleSubmit();
+                            }
+                        }, 500);
+                    }
+                    
+                    // Clear transition data
+                    sessionStorage.removeItem('chatTransition');
+                    
+                } catch (e) {
+                    console.error('Error parsing transition data:', e);
+                    sessionStorage.removeItem('chatTransition');
+                }
             }
-        });
+        }
+    }
 
-        // Close modal with Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeSettings();
-            }
-        });
+    let folderCruncherApp;
 
-        // Initialize the FolderCruncher app when DOM is loaded
-        document.addEventListener('DOMContentLoaded', async () => {
-            folderCruncherApp = new FolderCruncherApp();
-            await folderCruncherApp.initialize();
-            
-            // Handle transition data from landing page if present
-            folderCruncherApp.handleTransitionData();
-        });
-    </script>
+    // Global function to clear folder (called from HTML)
+    function clearFolder() {
+        if (folderCruncherApp) {
+            folderCruncherApp.clearFolderContents();
+        }
+    }
+
+    // Settings Modal Functions
+    function openSettings() {
+        const modal = document.getElementById('settingsModal');
+        const textarea = document.getElementById('systemMessage');
+        
+        // Load current system message
+        textarea.value = folderCruncherApp.systemMessage;
+        modal.classList.add('active');
+        
+        // Focus on textarea if not readonly
+        if (!folderCruncherApp.currentCustomJob) {
+            setTimeout(() => textarea.focus(), 100);
+        }
+    }
+
+    function closeSettings() {
+        const modal = document.getElementById('settingsModal');
+        modal.classList.remove('active');
+    }
+
+    function saveSettings() {
+        if (folderCruncherApp.currentCustomJob) {
+            // Don't save for custom jobs
+            closeSettings();
+            return;
+        }
+        
+        const textarea = document.getElementById('systemMessage');
+        folderCruncherApp.systemMessage = textarea.value;
+        folderCruncherApp.saveSystemMessage();
+        closeSettings();
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', (e) => {
+        const modal = document.getElementById('settingsModal');
+        if (e.target === modal) {
+            closeSettings();
+        }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeSettings();
+        }
+    });
+
+    // Initialize the FolderCruncher app when DOM is loaded
+    document.addEventListener('DOMContentLoaded', async () => {
+        folderCruncherApp = new FolderCruncherApp();
+        await folderCruncherApp.initialize();
+        
+        // Handle transition data from landing page if present
+        folderCruncherApp.handleTransitionData();
+
+        // Initially show folder section and hide toggle
+        document.getElementById('folder-toggle-container').style.display = 'none';
+        document.getElementById('folder-section').classList.remove('hidden');
+    });
+</script>
 </body>
 </html>
