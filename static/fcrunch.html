@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>frende - FolderCruncher</title>
+    <title>frende - Folder Cruncher</title>
     <script src="./js/markdown-it.min.js"></script> 
     <script src="./js/chat-template.js"></script>
     <style>
@@ -250,17 +250,17 @@
 <body>
 
     <script>
-        // Enhanced FolderCruncher Implementation using ChatTemplate with Folder Analysis
+        // Enhanced Folder Cruncher Implementation using ChatTemplate with Folder Analysis
         class FolderCruncherApp extends ChatTemplate {
             constructor() {
                 super({
-                    modeText: 'FOLDERCRUNCHER',
+                    modeText: 'FOLDER CRUNCHER',
                     backUrl: '/',
-                    welcomeTitle: 'FolderCruncher',
+                    welcomeTitle: 'Folder Cruncher',
                     welcomeSubtitle: 'Analyze and query your folder contents',
                     placeholder: 'Ask questions about your folder contents...',
                     
-                    // Enable all features for FolderCruncher
+                    // Enable all features for Folder Cruncher
                     enableTTS: true,
                     enableAttachments: true,
                     enableAudio: true,
@@ -519,7 +519,7 @@
                 const welcomeMessage = document.querySelector('.welcome-message');
                 if (welcomeMessage && this.folderContents.size > 0) {
                     welcomeMessage.innerHTML = `
-                        <p>FolderCruncher Ready</p>
+                        <p>Folder Cruncher Ready</p>
                         <p>Loaded ${this.folderContents.size} files. Ask questions about your folder contents!</p>
                     `;
                 }
@@ -547,7 +547,7 @@
                 const welcomeMessage = document.querySelector('.welcome-message');
                 if (welcomeMessage) {
                     welcomeMessage.innerHTML = `
-                        <p>FolderCruncher</p>
+                        <p>Folder Cruncher</p>
                         <p>Select a folder to analyze and query its contents</p>
                     `;
                 }
@@ -636,7 +636,7 @@
                 const welcomeMessage = document.querySelector('.welcome-message');
                 if (welcomeMessage) {
                     welcomeMessage.innerHTML = `
-                        <p>FolderCruncher with ${this.currentCustomJob.name}</p>
+                        <p>Folder Cruncher with ${this.currentCustomJob.name}</p>
                         <p>Your custom folder analysis assistant</p>
                     `;
                 }
@@ -650,7 +650,7 @@
                 const modalHTML = `
                     <div id="settingsModal" class="settings-modal">
                         <div class="settings-content">
-                            <h2>${this.currentCustomJob ? 'Job Settings' : 'FolderCruncher Settings'}</h2>
+                            <h2>${this.currentCustomJob ? 'Job Settings' : 'Folder Cruncher Settings'}</h2>
                             <label for="systemMessage">
                                 ${this.currentCustomJob ? 'Job Prompt:' : 'System Message:'}
                             </label>
@@ -658,7 +658,7 @@
                                 id="systemMessage" 
                                 placeholder="${this.currentCustomJob ? 
                                     'Modify the behavior of your custom AI job...' : 
-                                    'Configure how FolderCruncher should analyze and organize folders'}"
+                                    'Configure how Folder Cruncher should analyze and organize folders'}"
                                 ${this.currentCustomJob ? 'readonly' : ''}
                             ></textarea>
                             ${this.currentCustomJob ? `
