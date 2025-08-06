@@ -231,24 +231,64 @@
                 }
             }
 
-            // Override handleSubmit to use processMessage
+            // New method to read file as text (async)
+            readFileAsText(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+            }
+
+            // Override handleSubmit to use processMessage and handle text files
             async handleSubmit() {
                 if (this.isGenerating) {
                     this.stopGeneration();
                     return;
                 }
                 
-                const message = this.messageInput.value.trim();
+                let message = this.messageInput.value.trim();
                 if (!message && this.attachedFiles.size === 0) return;
 
-                // Process the message with system prompt
-                const processedMessage = this.processMessage(message);
+                // Process attachments: build full text (message + text file contents)
+                let fullText = message;
+                const textContents = [];
+                const formData = new FormData(); // We'll build this after processing files
+
+                for (const [name, file] of this.attachedFiles) {
+                    if (file.type.startsWith('image/')) {
+                        formData.append('image', file);
+                    } else if (file.type.startsWith('audio/')) {
+                        formData.append('audio', file);
+                    } else if (file.type.startsWith('text/') || file.name.toLowerCase().endsWith('.md')) {
+                        // Read as text file (e.g., .md support)
+                        try {
+                            const content = await this.readFileAsText(file);
+                            textContents.push(`File: ${file.name}\nContent:\n${content}\n`);
+                        } catch (e) {
+                            console.error(`Error reading text file ${file.name}:`, e);
+                            // Skip silently; could add UI error if needed
+                        }
+                    } else {
+                        console.warn(`Unsupported file type for ${file.name}; skipping.`);
+                        // Could add UI feedback here if desired
+                    }
+                }
+
+                // Append text file contents to fullText
+                if (textContents.length > 0) {
+                    fullText += '\n\n' + textContents.join('\n\n');
+                }
+
+                // Process the full message with system prompt
+                const processedMessage = this.processMessage(fullText);
 
                 this.isGenerating = true;
                 this.updateSendButton();
 
                 const messageAttachments = new Map(this.attachedFiles);
-                this.addMessage('user', message, messageAttachments); // Show original message to user
+                this.addMessage('user', message, messageAttachments); // Show original message + attachments to user
                 
                 this.messageInput.value = '';
                 this.autoResizeTextarea();
@@ -262,17 +302,8 @@
                 messageContent.appendChild(cursor);
 
                 try {
-                    const formData = new FormData();
-                    formData.append('text', processedMessage); // Send processed message to API
+                    formData.append('text', processedMessage); // Send processed full text to API
                     formData.append('max_tokens', this.config.maxTokens.toString());
-                    
-                    messageAttachments.forEach((file, name) => {
-                        if (file.type.startsWith('image/')) {
-                            formData.append('image', file);
-                        } else if (file.type.startsWith('audio/')) {
-                            formData.append('audio', file);
-                        }
-                    });
 
                     const fullResponse = await this.handleStreamingGeneration(formData, messageContent, cursor);
                     

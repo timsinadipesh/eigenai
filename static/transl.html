@@ -363,16 +363,18 @@ Do not include any other text, explanations, or formatting outside of this JSON 
                 }
             }
 
+            // New method to read file as text (async)
+            readFileAsText(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+            }
+
             // Override processMessage to use translation prompt
             processMessage(message) {
-                // Check if there are multimedia attachments
-                this.hasMultimediaAttachments = false;
-                this.attachedFiles.forEach((file) => {
-                    if (file.type && (file.type.startsWith('image/') || file.type.startsWith('audio/'))) {
-                        this.hasMultimediaAttachments = true;
-                    }
-                });
-
                 // Use different prompt for multimedia vs text-only
                 const translationPrompt = this.hasMultimediaAttachments 
                     ? this.generateMultimediaTranslationPrompt() 
@@ -568,11 +570,39 @@ Do not include any other text, explanations, or formatting outside of this JSON 
                     return;
                 }
                 
-                const message = this.messageInput.value.trim();
+                let message = this.messageInput.value.trim();
                 if (!message && this.attachedFiles.size === 0) return;
 
-                // Process the message with translation prompt
-                const processedMessage = this.processMessage(message);
+                // Process attachments: build full text (message + text file contents) and set multimedia flag
+                let fullText = message;
+                const textContents = [];
+                this.hasMultimediaAttachments = false;
+
+                for (const [name, file] of this.attachedFiles) {
+                    if (file.type.startsWith('image/') || file.type.startsWith('audio/')) {
+                        this.hasMultimediaAttachments = true;
+                    } else if (file.type.startsWith('text/') || file.name.toLowerCase().endsWith('.md')) {
+                        // Read as text file (e.g., .md support)
+                        try {
+                            const content = await this.readFileAsText(file);
+                            textContents.push(`File: ${file.name}\nContent:\n${content}\n`);
+                        } catch (e) {
+                            console.error(`Error reading text file ${file.name}:`, e);
+                            // Skip silently; could add UI error if needed
+                        }
+                    } else {
+                        console.warn(`Unsupported file type for ${file.name}; skipping.`);
+                        // Could add UI feedback here if desired
+                    }
+                }
+
+                // Append text file contents to fullText
+                if (textContents.length > 0) {
+                    fullText += '\n\n' + textContents.join('\n\n');
+                }
+
+                // Process the full message with translation prompt
+                const processedMessage = this.processMessage(fullText);
 
                 this.isGenerating = true;
                 this.updateSendButton();
