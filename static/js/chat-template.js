@@ -22,7 +22,7 @@ class ChatTemplate {
             // Customization
             modeText: 'CHAT',
             backUrl: '/',
-            welcomeTitle: 'Chat with frende',
+            welcomeTitle: 'Chat with eigenai',
             welcomeSubtitle: 'Your private on-device AI companion',
             placeholder: 'Type your message...',
             

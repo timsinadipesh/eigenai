@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>frende - Chat</title>
+    <title>eigenai - Chat</title>
     <script src="./js/markdown-it.min.js"></script> 
     <script src="./js/chat-template.js"></script>
     <style>
@@ -98,7 +98,7 @@
                 super({
                     modeText: 'CHAT',
                     backUrl: '/',
-                    welcomeTitle: 'Chat with frende',
+                    welcomeTitle: 'Chat with eigenai',
                     welcomeSubtitle: 'Your private on-device AI companion',
                     placeholder: 'Type your message...',
                     
@@ -167,7 +167,7 @@
                 }
 
                 // Update page title
-                document.title = `frende - ${this.currentCustomJob.name}`;
+                document.title = `eigenai - ${this.currentCustomJob.name}`;
             }
 
             // Inject settings modal into DOM
@@ -182,7 +182,7 @@
                                 id="systemMessage" 
                                 placeholder="${this.currentCustomJob ? 
                                     'Modify the behavior of your custom AI job...' : 
-                                    'Enter system message for frende to follow'}"
+                                    'Enter system message for eigenai to follow'}"
                             ></textarea>
                             <div class="settings-actions">
                                 <button class="settings-btn secondary" onclick="closeSettings()">Cancel</button>
